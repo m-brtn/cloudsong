@@ -76,6 +76,8 @@ GlowOut glow_vs(uint vertex : SV_VertexID) {
     GlowOut o;
     o.position = mul(quenchFrame.viewProj, float4(world, 1.0));
     local.z = 1.0 - fogAt(world, quenchFrame.cameraPos.xyz).a;
+    // Beams are bright enough to shine through the haze from afar.
+    if (type == CS_GLOW_BEAM) local.z = sqrt(local.z);
     o.local = local;
     o.color = color;
     return o;

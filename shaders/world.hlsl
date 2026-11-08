@@ -26,11 +26,16 @@ float csTriNoise(float3 p, float3 w) {
     return csNoise(p.yz) * w.x + csNoise(p.xz + 31.0) * w.y + csNoise(p.xy + 67.0) * w.z;
 }
 
+// The weights of csTriNoise's planes for a normal.
+float3 csTriWeights(float3 N) {
+    const float3 w = pow(abs(N), 4.0);
+    return w / (w.x + w.y + w.z);
+}
+
 // Soft stone over a base colour: broad patches and a fine grain, warmer where it faces the sun, cooler and lilac where
 // it faces down onto the clouds.
 float3 csStone(QuenchSurfaceInput i, float3 base) {
-    float3 w = pow(abs(i.normal), 4.0);
-    w /= w.x + w.y + w.z;
+    const float3 w = csTriWeights(i.normal);
     const float big = csTriNoise(i.world * 0.06, w);
     const float mid = csTriNoise(i.world * 0.27 + 13.0, w);
     const float fine = csTriNoise(i.world * 1.3 + 5.0, w);
@@ -42,8 +47,7 @@ float3 csStone(QuenchSurfaceInput i, float3 base) {
 
 // The normal bent by soft bumps of stone (noise of `scale` per metre).
 float3 csBump(QuenchSurfaceInput i, float3 N, float scale, float strength) {
-    float3 w = pow(abs(N), 4.0);
-    w /= w.x + w.y + w.z;
+    const float3 w = csTriWeights(N);
     const float3 p = i.world * scale;
     const float e = 0.15;
     const float f = csTriNoise(p, w);
@@ -106,12 +110,17 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
             s.albedo = lerp(s.albedo, float3(0.24, 0.34, 0.12), moss * 0.9);
             s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
         } else {
-            const float moss = smoothstep(0.35, 0.7, n + 0.25 * csNoise(i.world.xz * 0.5));
-            s.albedo = lerp(s.albedo * float3(0.75, 0.85, 0.8), float3(0.12, 0.26, 0.14), moss * 0.8);
+            // Soft moss in wide patches, pale damp stone between them; specks that glow in the moss.
+            s.normal = csBump(i, s.normal, 0.6, 0.35);
+            const float moss = smoothstep(0.3, 0.7, n + 0.35 * (csNoise(i.world.xz * 0.5 + i.world.y * 0.3) - 0.3));
+            s.albedo = lerp(s.albedo * float3(0.72, 0.8, 0.78), float3(0.1, 0.22, 0.13), moss * 0.85);
             s.occlusion = 0.3;
             s.roughness = lerp(0.9, 0.55, moss);
-            // The moss gives back a little green light of its own.
-            s.emissive += float3(0.015, 0.05, 0.025) * moss;
+            const float3 q = i.world * 3.0;
+            const float3 cell = floor(q);
+            const float speck = step(0.95, csHash(cell.xz + cell.y * float2(17.1, 5.3))) *
+                                (1.0 - smoothstep(0.08, 0.16, length(frac(q) - 0.5)));
+            s.emissive += float3(0.015, 0.05, 0.03) * moss + float3(0.25, 0.9, 0.6) * speck * moss;
         }
     } else {
         // A figure. The cape (uv.x from 2): its inside darker, diamond marks down the back that glow with the energy

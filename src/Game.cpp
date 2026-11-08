@@ -394,8 +394,31 @@ public:
         const Landmarks& l = m_world.landmarks();
         const float bright =
             m_ending >= 0.0f ? smoothstep(2.0f, 7.0f, m_ending) * (0.5f + 0.5f * float(m_spirits.awake())) : 0.0f;
-        m_glow.beam(l.beamBase + alt, 1.4f + 0.8f * bright, l.beamBase + alt + glm::vec3(0.0f, 900.0f, 0.0f),
-                    3.0f + 2.0f * bright, glm::vec3(3.2f, 2.6f, 1.8f) * (1.0f + 1.6f * bright), 0.02f, 0.4f);
+        // The temple's beam: a hot white core, the beam round it, a wide soft glow seen from afar, motes rising in it
+        // and a flare where it leaves the crown.
+        {
+            const glm::vec3 base = l.beamBase + alt;
+            const glm::vec3 top = base + glm::vec3(0.0f, 900.0f, 0.0f);
+            const float more = 1.0f + 1.2f * bright;
+            // From afar the glow widens with the distance, as it would through the eye's own haze.
+            const float far = glm::distance(glm::vec2(base.x, base.z), glm::vec2(eye().x, eye().z));
+            const float wide = smoothstep(40.0f, 220.0f, far);
+            m_glow.beam(base, 0.5f, top, 1.4f, glm::vec3(9.0f, 8.4f, 7.0f) * more, 0.005f, 0.5f, 1.0f);
+            m_glow.beam(base, 2.0f + 0.8f * bright + 1.5f * wide, top, 6.0f + 2.0f * bright,
+                        glm::vec3(3.2f, 2.6f, 1.7f) * more, 0.01f, 0.45f, 2.0f);
+            m_glow.beam(base, 7.0f + 2.0f * bright + 6.0f * wide, top, 40.0f,
+                        glm::vec3(1.1f, 0.85f, 0.55f) * more * (1.0f + 1.4f * wide), 0.02f, 0.3f, 3.0f);
+            m_glow.motes(base + glm::vec3(0.0f, 24.0f, 0.0f), glm::vec3(1.8f, 24.0f, 1.8f), 160, 0.08f, 0.4f,
+                         glm::vec3(5.0f, 4.3f, 3.0f), 13.0f);
+            const glm::vec3 crown = base + glm::vec3(0.0f, 12.2f, 0.0f);
+            m_glow.sprite(crown, 5.0f, glm::vec3(2.0f, 1.65f, 1.1f) * more, 0.2f);
+            // A streak of light across the crown, as through a lens.
+            const glm::vec3 right = glm::vec3(inv[0]);
+            const float away = glm::distance(crown, eye());
+            const float half = std::clamp(away * 0.12f, 8.0f, 60.0f), width = std::max(away * 0.0035f, 0.15f);
+            m_glow.beam(crown - right * half, width, crown + right * half, width, glm::vec3(2.4f, 2.0f, 1.4f) * more,
+                        0.5f, 0.5f, 4.0f);
+        }
         if (bright > 0.0f)
             m_glow.beam(l.beamBase + alt, 0.6f + 0.6f * bright, l.beamBase + alt + glm::vec3(0.0f, 60.0f, 0.0f),
                         1.6f + 1.5f * bright, glm::vec3(3.0f, 2.5f, 1.7f) * bright, 0.01f, 0.85f, 5.0f);
@@ -438,8 +461,34 @@ public:
                         glm::vec3(1.2f, 1.1f, 0.8f), 0.1f, 0.75f);
         m_glow.motes(l.caveCentre + alt + glm::vec3(0.0f, 2.5f, 0.0f), glm::vec3(8.0f, 2.5f, 8.0f), 90, 0.035f, 0.6f,
                      glm::vec3(4.0f, 3.6f, 1.6f), 3.0f);
-        m_glow.motes(l.start + alt + glm::vec3(0.0f, 2.0f, 20.0f), glm::vec3(30.0f, 2.0f, 30.0f), 160, 0.03f, 1.0f,
-                     glm::vec3(3.0f, 2.6f, 1.4f), 5.0f);
+        // Motes of light in the air round the camera, in fixed cells of the world so that they stay where they are.
+        {
+            constexpr float kCell = 24.0f;
+            const glm::vec3 at = eye();
+            const glm::ivec2 home(int(std::floor(at.x / kCell)), int(std::floor(at.z / kCell)));
+            for (int dz = -1; dz <= 1; ++dz)
+                for (int dx = -1; dx <= 1; ++dx) {
+                    const glm::ivec2 cell = home + glm::ivec2(dx, dz);
+                    const glm::vec2 centre = (glm::vec2(cell) + 0.5f) * kCell;
+                    const float ground = m_world.terrainHeight({centre.x, centre.y}).value_or(at.y - kAltitude - 3.0f);
+                    const float y = std::max(ground + kAltitude + 2.5f, at.y - 6.0f);
+                    m_glow.motes(glm::vec3(centre.x, y, centre.y), glm::vec3(kCell * 0.5f, 3.0f, kCell * 0.5f), 36,
+                                 0.035f, 1.0f, glm::vec3(3.2f, 2.7f, 1.5f), float((cell.x * 73 + cell.y * 31) & 1023));
+                }
+        }
+        // Small creatures of light that flutter over the meadows.
+        for (int i = 0; i < 14; ++i) {
+            const glm::vec3& home = l.lights[std::size_t(i) % l.lights.size()];
+            const float p = float(i) * 2.399f;
+            const float t = m_time * (0.35f + 0.05f * float(i % 4));
+            const glm::vec3 offset(std::sin(t + p) * 3.5f + std::sin(t * 2.3f + p) * 0.8f,
+                                   -0.6f + 0.35f * std::sin(t * 3.1f + p * 2.0f),
+                                   std::cos(t * 0.8f + p) * 3.5f + std::cos(t * 1.9f) * 0.6f);
+            const float flutter = 0.6f + 0.4f * std::abs(std::sin(m_time * 14.0f + p));
+            const glm::vec3 tint = i % 3 == 0 ? glm::vec3(1.2f, 1.6f, 2.0f) : glm::vec3(2.0f, 1.5f, 1.4f);
+            m_glow.sprite(home + alt + offset + glm::vec3(float(i % 3) - 1.0f, 0.0f, float(i % 2) * 2.0f - 1.0f),
+                          0.16f * flutter, tint, 0.7f);
+        }
         // The drifting lights; a gathered one flies into the cape and fades.
         const glm::vec3 chest = feet + glm::vec3(0.0f, 0.55f, 0.0f);
         for (std::size_t i = 0; i < l.lights.size(); ++i) {
@@ -876,10 +925,11 @@ private:
     // The quality's render settings and the volumes.
     void applySettings(App& app) {
         render::RenderSettings rs = m_renderer->settings();
-        rs.cloudShadows = false;
+        rs.cloudShadows = true;
+        rs.cloudShadowHeight = kAltitude;
         rs.bloom = true;
-        rs.bloomStrength = 0.09f;
-        rs.bloomThreshold = 1.3f;
+        rs.bloomStrength = 0.12f;
+        rs.bloomThreshold = 1.15f;
         rs.toneCurve = render::ToneCurve::Agx;
         rs.vignette = 0.22f;
         switch (m_settings.quality) {
@@ -925,14 +975,14 @@ private:
 
     struct Mood {
         float sunElevation = 10.0f, sunAzimuth = 135.0f; // degrees: ahead and to the right on the way to the temple
-        glm::vec3 sunTint{1.3f, 1.0f, 0.75f};
-        float sunScale = 1.15f;
+        glm::vec3 sunTint{1.4f, 0.98f, 0.68f};
+        float sunScale = 1.2f;
         float atmosphere = 1.0f;
-        glm::vec3 zenith{0.9f, 0.92f, 1.0f}, horizon{1.2f, 0.95f, 0.85f}, glow{1.6f, 1.25f, 0.9f}; // daylight tints
-        glm::vec3 ambientTint{0.6f, 0.62f, 0.82f}; // a cool fill against the warm sun
+        glm::vec3 zenith{0.82f, 0.9f, 1.08f}, horizon{1.2f, 0.95f, 0.88f}, glow{1.7f, 1.25f, 0.85f}; // daylight tints
+        glm::vec3 ambientTint{0.55f, 0.62f, 0.9f}; // a cool fill against the warm sun
         float ambient = 1.4f;
-        float fogDensity = 0.0007f, fogMax = 0.85f;
-        glm::vec3 fogColor{0.92f, 0.8f, 0.78f};
+        float fogDensity = 0.0009f, fogMax = 0.9f;
+        glm::vec3 fogColor{0.94f, 0.8f, 0.8f};
         float exposure = 1.08f;
     };
 

@@ -17,7 +17,7 @@ include(FetchContent)
 # main after v0.11.0: the camera above the clouds, quench_weather_sounds() in games
 FetchContent_Declare(quench
     GIT_REPOSITORY https://github.com/m-brtn/Quench.git
-    GIT_TAG 56d0b8fa586fed99b43a6405a840c8b78e51608e)
+    GIT_TAG 0a1ace97a6564907ff54de71a041a3ee36553965)
 FetchContent_MakeAvailable(quench)
 
 # The host-tools preset builds only the engine's shader compiler and asset cooker (for the iOS builds).

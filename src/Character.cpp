@@ -184,7 +184,7 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
                     glm::vec3(frame * glm::vec4(std::cos(a) * r, 0.0f, std::sin(a) * r * 0.8f, 0.0f));
                 tip.vertices.push_back(
                     {.position = spine[std::size_t(i)] + offset,
-                     .color = glm::vec4(glm::mix(look.hood, look.cape, smoothstep(0.1f, 0.5f, t)), 1.0f)});
+                     .color = glm::vec4(glm::mix(look.hood, look.cape, 0.35f * smoothstep(0.2f, 0.8f, t)), 1.0f)});
             }
         }
         for (int i = 0; i < n; ++i)

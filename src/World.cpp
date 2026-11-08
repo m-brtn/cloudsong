@@ -853,6 +853,55 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
         computeNormals(ring);
         append(stones, ring, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 8.25f, 0.0f)),
                glm::vec4(stoneColor(random), 1.0f));
+        // Over the ring, a pinnacle on each column and an open crown of ribs that meet in a small ring round the beam.
+        const glm::vec4 crownColor(stoneColor(random) * 1.05f, 1.0f);
+        for (int i = 0; i < 10; ++i) {
+            const float a = kTau * float(i) / 10.0f;
+            MeshData pinnacle = lathe({{1e-4f, 0.0f},
+                                       {0.36f, 0.0f},
+                                       {0.36f, 0.35f},
+                                       {0.24f, 0.45f},
+                                       {0.2f, 0.9f},
+                                       {0.27f, 1.0f},
+                                       {0.12f, 1.25f},
+                                       {1e-4f, 2.1f}},
+                                      8);
+            computeNormals(pinnacle);
+            append(stones, pinnacle,
+                   glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(std::cos(a) * 5.4f, 8.5f, std::sin(a) * 5.4f)),
+                   crownColor);
+        }
+        auto piece = [&](glm::vec3 from, glm::vec3 to, float thick) {
+            const glm::vec3 along = to - from;
+            const glm::vec3 y = glm::normalize(along);
+            const glm::vec3 x =
+                glm::normalize(glm::cross(y, glm::vec3(0.0f, 0.0f, 1.0f) + glm::vec3(0.3f, 0.0f, 0.0f)));
+            const glm::vec3 z = glm::cross(x, y);
+            glm::mat4 m(glm::vec4(x, 0.0f), glm::vec4(y, 0.0f), glm::vec4(z, 0.0f),
+                        glm::vec4((from + to) * 0.5f + kAlt, 1.0f));
+            MeshData b = render::boxMesh(glm::vec3(thick, glm::length(along) * 0.5f + thick * 0.4f, thick));
+            append(stones, b, m, crownColor);
+        };
+        constexpr int kRibs = 5;
+        const float crownTop = 14.5f;
+        for (int i = 0; i < kRibs; ++i) {
+            const float a = kTau * (float(i) + 0.5f) / float(kRibs);
+            const glm::vec3 dir(std::cos(a), 0.0f, std::sin(a));
+            // A quadratic curve from the ring up and in.
+            const glm::vec3 p0 = c + dir * 5.4f + glm::vec3(0.0f, 8.4f, 0.0f);
+            const glm::vec3 p1 = c + dir * 5.2f + glm::vec3(0.0f, 13.6f, 0.0f);
+            const glm::vec3 p2 = c + dir * 1.5f + glm::vec3(0.0f, crownTop, 0.0f);
+            glm::vec3 prev = p0;
+            for (int k = 1; k <= 8; ++k) {
+                const float t = float(k) / 8.0f;
+                const glm::vec3 p = (1.0f - t) * (1.0f - t) * p0 + 2.0f * (1.0f - t) * t * p1 + t * t * p2;
+                piece(prev, p, glm::mix(0.26f, 0.16f, t));
+                prev = p;
+            }
+        }
+        MeshData top = render::torusMesh(1.5f, 0.24f, 32, 8);
+        computeNormals(top);
+        append(stones, top, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, crownTop, 0.0f)), crownColor);
         block(c + glm::vec3(0.0f, 2.15f, 0.0f), glm::vec3(0.8f, 0.4f, 0.8f), 0.0f);
         m_landmarks.altar.y = c.y + 1.75f;
         m_landmarks.beamBase = c + glm::vec3(0.0f, 2.55f, 0.0f);
@@ -887,21 +936,26 @@ void World::buildCave(render::Scene& scene, quench::PhysicsWorld& physics) {
     // A dome of rock: rings from the ground up to the crown, lumpy, its foot sunk into the floor.
     MeshData shell;
     std::vector<glm::vec2> params;
+    // A point of the dome (local) at an angle round it and an elevation.
+    auto dome = [&](float a, float phi) {
+        const glm::vec2 dir(std::cos(a), std::sin(a));
+        const float lump = fbm(dir * 1.9f + glm::vec2(phi * 1.7f, 3.0f), 3, 211u);
+        const float knob = fbm(dir * 6.0f + glm::vec2(phi * 5.0f, 9.0f), 2, 213u);
+        const float rr = radius * std::pow(std::max(std::cos(phi), 0.0f), 0.7f) * (1.0f + 0.14f * lump + 0.06f * knob);
+        const float y =
+            c.y - 1.4f + height * std::sin(phi) * (1.0f + 0.1f * std::cos(phi) * fbm(dir * 2.3f + 7.0f, 2, 223u));
+        return glm::vec3(c.x + dir.x * rr, y, c.z + dir.y * rr);
+    };
     for (int r = 0; r <= rings; ++r) {
         const float phi = 0.5f * kPi * float(r) / float(rings);
         for (int k = 0; k <= segments; ++k) {
             const float a = kTau * float(k % segments) / float(segments);
             const glm::vec2 dir(std::cos(a), std::sin(a));
-            const float lump = fbm(dir * 1.9f + glm::vec2(phi * 1.7f, 3.0f), 3, 211u);
-            const float knob = fbm(dir * 6.0f + glm::vec2(phi * 5.0f, 9.0f), 2, 213u);
-            const float rr =
-                radius * std::pow(std::max(std::cos(phi), 0.0f), 0.7f) * (1.0f + 0.14f * lump + 0.06f * knob);
-            const float y =
-                c.y - 1.4f + height * std::sin(phi) * (1.0f + 0.1f * std::cos(phi) * fbm(dir * 2.3f + 7.0f, 2, 223u));
+            const glm::vec3 p = dome(a, phi);
             const float patch = fbm(dir * 2.5f + glm::vec2(phi * 2.0f, 1.0f), 2, 227u) * 0.5f + 0.5f;
             const glm::vec3 color = lerpColor(srgb(170, 156, 138), srgb(136, 132, 122), patch);
-            shell.vertices.push_back({.position = glm::vec3(c.x + dir.x * rr, y, c.z + dir.y * rr) + kAlt,
-                                      .uv = glm::vec2(a * radius * 0.3f, y * 0.3f),
+            shell.vertices.push_back({.position = p + kAlt,
+                                      .uv = glm::vec2(a * radius * 0.3f, p.y * 0.3f),
                                       .color = glm::vec4(color, 1.0f)});
             params.push_back({a, phi});
         }
@@ -925,6 +979,59 @@ void World::buildCave(render::Scene& scene, quench::PhysicsWorld& physics) {
             // Counter-clockwise from outside.
             shell.indices.insert(shell.indices.end(), {a, b, a + 1, a + 1, b, b + 1});
         }
+    // Rounded lips of rock along the openings' ragged edges: a tube along each edge.
+    auto tube = [&](const std::vector<glm::vec3>& path, float thick, bool closed) {
+        constexpr int kSides = 8;
+        const auto first = std::uint32_t(shell.vertices.size());
+        const int n = int(path.size());
+        for (int i = 0; i < n; ++i) {
+            const glm::vec3 prev = path[std::size_t(closed ? (i + n - 1) % n : std::max(i - 1, 0))];
+            const glm::vec3 next = path[std::size_t(closed ? (i + 1) % n : std::min(i + 1, n - 1))];
+            const glm::vec3 t = glm::normalize(next - prev);
+            const glm::vec3 side =
+                glm::normalize(glm::cross(t, glm::vec3(0.0f, 1.0f, 0.0f) + t.y * glm::vec3(1.0f, 0.0f, 0.0f)));
+            const glm::vec3 up = glm::cross(side, t);
+            const float r = thick * (0.8f + 0.4f * (fbm(glm::vec2(float(i) * 0.5f, 3.0f), 2, 229u) * 0.5f + 0.5f));
+            for (int s = 0; s < kSides; ++s) {
+                const float a = kTau * float(s) / float(kSides);
+                shell.vertices.push_back(
+                    {.position = path[std::size_t(i)] + (side * std::cos(a) + up * std::sin(a)) * r + kAlt,
+                     .color = glm::vec4(srgb(150, 140, 126), 1.0f)});
+            }
+        }
+        const int segs = closed ? n : n - 1;
+        for (int i = 0; i < segs; ++i)
+            for (int s = 0; s < kSides; ++s) {
+                const auto a = first + std::uint32_t(i * kSides + s);
+                const auto b = first + std::uint32_t(((i + 1) % n) * kSides + s);
+                const auto a1 = first + std::uint32_t(i * kSides + (s + 1) % kSides);
+                const auto b1 = first + std::uint32_t(((i + 1) % n) * kSides + (s + 1) % kSides);
+                shell.indices.insert(shell.indices.end(), {a, b, a1, a1, b, b1});
+            }
+    };
+    {
+        std::vector<glm::vec3> arch;
+        for (int i = 0; i <= 24; ++i) {
+            const float t = kPi * float(i) / 24.0f;
+            arch.push_back(dome(mouthAngle + 0.3f * std::cos(t), 0.62f * std::sin(t)) -
+                           glm::vec3(0.0f, 0.4f * (1.0f - std::sin(t)), 0.0f));
+        }
+        tube(arch, 0.45f, false);
+    }
+    for (const glm::vec3& h : l.caveHoles) {
+        // The dome's height round the hole: the highest of its vertices near each point of the rim.
+        std::vector<glm::vec3> rim;
+        for (int i = 0; i < 20; ++i) {
+            const float a = kTau * float(i) / 20.0f;
+            const glm::vec2 xz = glm::vec2(h.x, h.z) + glm::vec2(std::cos(a), std::sin(a)) * 1.3f;
+            float y = -1e9f;
+            for (const Vertex& v : shell.vertices)
+                if (glm::distance(glm::vec2(v.position.x, v.position.z), xz) < 0.7f)
+                    y = std::max(y, v.position.y - kAltitude);
+            if (y > -1e8f) rim.push_back(glm::vec3(xz.x, y, xz.y));
+        }
+        if (rim.size() == 20) tube(rim, 0.32f, true);
+    }
     computeNormals(shell);
     computeTangents(shell);
     if (Result<render::MeshId> id = scene.addMesh(shell.desc("cave")))
