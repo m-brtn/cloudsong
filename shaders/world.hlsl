@@ -40,8 +40,10 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         const float3 p = i.world * 1.3;
         const float n = csNoise(p.xz + p.y * 0.7) * 0.55 + csNoise(p.xy * 2.7 + p.z) * 0.45;
         s.albedo *= lerp(0.78, 1.12, n);
-        const float moss = smoothstep(0.45, 0.8, i.normal.y + (csNoise(i.world.xz * 2.1 + i.world.y) - 0.5) * 0.7);
-        s.albedo = lerp(s.albedo, float3(0.16, 0.25, 0.06), moss * 0.85);
+        // Moss in patches on what faces up, more toward the edges of the stone.
+        const float patches = csNoise(i.world.xz * 0.9 + i.world.y * 0.3) * 0.65 + csNoise(i.world.xz * 3.7) * 0.35;
+        const float moss = smoothstep(0.5, 0.75, i.normal.y) * smoothstep(0.52, 0.78, patches);
+        s.albedo = lerp(s.albedo, float3(0.2, 0.3, 0.1), moss * 0.8);
         s.roughness = lerp(s.roughness, 0.95, moss);
         s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
     } else {

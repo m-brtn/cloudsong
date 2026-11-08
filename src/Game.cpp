@@ -3,6 +3,7 @@
 
 #include "Character.h"
 #include "Glow.h"
+#include "Journey.h"
 #include "Physics.h"
 #include "Player.h"
 #include "World.h"
@@ -22,8 +23,8 @@
 
 #include <imgui.h>
 
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <optional>
 
@@ -44,7 +45,7 @@ float parseFloat(std::string_view s, float fallback = 0.0f) {
 // heading when left alone, pulled in by what stands between it and the player.
 class CameraRig {
 public:
-    float yaw = 0.0f;   // heading the camera looks along (0: +z)
+    float yaw = 0.0f;    // heading the camera looks along (0: +z)
     float pitch = 0.26f; // down (radians)
     float distance = 5.6f;
 
@@ -66,8 +67,9 @@ public:
         // Behind the player when it moves and nobody turns the camera.
         if (m_idle > 1.2f && speed > 0.8f) {
             const float follow = glide > 0.3f ? 1.4f : 3.5f;
-            yaw = wrapAngle(yaw + wrapAngle(heading - yaw) * (1.0f - std::exp(-dt / follow)) * std::min(speed / 4.0f, 1.0f));
-            const float wantPitch = glide > 0.3f ? 0.14f : 0.26f;
+            yaw = wrapAngle(yaw +
+                            wrapAngle(heading - yaw) * (1.0f - std::exp(-dt / follow)) * std::min(speed / 4.0f, 1.0f));
+            const float wantPitch = glide > 0.3f ? 0.24f : 0.26f;
             pitch = approach(pitch, wantPitch, 2.5f, dt);
         }
         m_pivot.x = approach(m_pivot.x, target.x, 0.06f, dt);
@@ -146,10 +148,11 @@ public:
             m_figureMaterial = m_scene->addMaterial(figure);
             m_figure = Character(look);
             m_figure.setPlacement(start, l.startYaw);
-            m_figureInstance = m_scene->addInstance({.mesh = *id, .material = m_figureMaterial,
-                                                     .transform = m_figure.transform()});
+            m_figureInstance =
+                m_scene->addInstance({.mesh = *id, .material = m_figureMaterial, .transform = m_figure.transform()});
         }
         m_camera.reset(start + glm::vec3(0.0f, 1.1f, 0.0f), l.startYaw);
+        m_journey.reset(l);
 
         // The golden hour: a low warm sun behind the way to the temple, a soft haze over the clouds.
         m_towardSun = render::skyDirection(16.0f, 70.0f);
@@ -202,14 +205,21 @@ public:
         using app::GamepadAxis;
         using app::GamepadButton;
         app::Input& input = app.input();
-        m_left = input.addAction("left", {*Binding::key("A"), *Binding::key("Left"), Binding::gamepadAxis(GamepadAxis::LeftX, false)});
-        m_right = input.addAction("right", {*Binding::key("D"), *Binding::key("Right"), Binding::gamepadAxis(GamepadAxis::LeftX, true)});
-        m_forward = input.addAction("forward", {*Binding::key("W"), *Binding::key("Up"), Binding::gamepadAxis(GamepadAxis::LeftY, false)});
-        m_back = input.addAction("back", {*Binding::key("S"), *Binding::key("Down"), Binding::gamepadAxis(GamepadAxis::LeftY, true)});
-        m_lookLeft = input.addAction("look_left", {*Binding::key("J"), Binding::gamepadAxis(GamepadAxis::RightX, false)});
-        m_lookRight = input.addAction("look_right", {*Binding::key("L"), Binding::gamepadAxis(GamepadAxis::RightX, true)});
+        m_left = input.addAction(
+            "left", {*Binding::key("A"), *Binding::key("Left"), Binding::gamepadAxis(GamepadAxis::LeftX, false)});
+        m_right = input.addAction(
+            "right", {*Binding::key("D"), *Binding::key("Right"), Binding::gamepadAxis(GamepadAxis::LeftX, true)});
+        m_forward = input.addAction(
+            "forward", {*Binding::key("W"), *Binding::key("Up"), Binding::gamepadAxis(GamepadAxis::LeftY, false)});
+        m_back = input.addAction(
+            "back", {*Binding::key("S"), *Binding::key("Down"), Binding::gamepadAxis(GamepadAxis::LeftY, true)});
+        m_lookLeft =
+            input.addAction("look_left", {*Binding::key("J"), Binding::gamepadAxis(GamepadAxis::RightX, false)});
+        m_lookRight =
+            input.addAction("look_right", {*Binding::key("L"), Binding::gamepadAxis(GamepadAxis::RightX, true)});
         m_lookUp = input.addAction("look_up", {*Binding::key("I"), Binding::gamepadAxis(GamepadAxis::RightY, false)});
-        m_lookDown = input.addAction("look_down", {*Binding::key("K"), Binding::gamepadAxis(GamepadAxis::RightY, true)});
+        m_lookDown =
+            input.addAction("look_down", {*Binding::key("K"), Binding::gamepadAxis(GamepadAxis::RightY, true)});
         m_jump = input.addAction("jump", {*Binding::key("Space"), Binding::gamepad(GamepadButton::South)});
         m_walk = input.addAction("walk", {*Binding::key("Left Shift")});
         m_call = input.addAction("call", {*Binding::key("E"), Binding::gamepad(GamepadButton::West)});
@@ -229,7 +239,14 @@ public:
         m_previous = m_current;
         m_player.step(float(dt), in, *m_physics);
         m_current = m_player.position();
-        if (m_player.grounded()) m_player.energy = std::min(float(m_player.maxEnergy), m_player.energy + float(dt) * 0.25f);
+        const bool called = (input.down(m_call) || m_scriptCall) && !m_callWasDown;
+        m_callWasDown = input.down(m_call) || m_scriptCall;
+        m_scriptCall = false;
+        if (called) m_callAge = 0.0f;
+        const JourneyEvents events =
+            m_journey.step(float(dt), m_player, m_current - glm::vec3(0.0f, kAltitude, 0.0f), called);
+        if (events.lightTaken >= 0) m_flash = 1.6f;
+        if (events.candleLit >= 0) m_world.setCandleLit(*m_scene, events.candleLit, true);
         // Fallen into the clouds: back to the last firm ground.
         if (m_player.grounded() && m_safeTimer <= 0.0f) {
             m_safe = m_current;
@@ -280,6 +297,11 @@ public:
         m_scene->setInstanceColor(m_figureInstance, glm::vec4(1.0f),
                                   glm::vec4(m_player.energy, float(m_player.maxEnergy), m_flash, 0.0f));
 
+        if (m_callAge < 50.0f) {
+            if (m_callAge == 0.0f) m_callCentre = feet;
+            m_callAge += dt;
+            m_world.setCallRing(*m_scene, m_callCentre, m_callAge);
+        }
         m_weather.update(frameDt);
         m_scene->setWeather(m_weather);
         m_world.updateDetail(*m_scene, eye());
@@ -293,15 +315,35 @@ public:
         m_glow.beam(l.beamBase + alt, 1.4f, l.beamBase + alt + glm::vec3(0.0f, 900.0f, 0.0f), 3.0f,
                     glm::vec3(3.2f, 2.6f, 1.8f), 0.02f, 0.4f);
         for (const glm::vec3& shaft : l.caveShafts)
-            m_glow.beam(shaft + alt + glm::vec3(-2.0f, 9.0f, 1.0f), 0.9f, shaft + alt, 1.4f, glm::vec3(1.6f, 1.45f, 1.0f), 0.1f, 0.75f);
+            m_glow.beam(shaft + alt + glm::vec3(-2.0f, 9.0f, 1.0f), 0.9f, shaft + alt, 1.4f,
+                        glm::vec3(1.6f, 1.45f, 1.0f), 0.1f, 0.75f);
         m_glow.motes(l.caveCentre + alt + glm::vec3(0.0f, 2.5f, 0.0f), glm::vec3(8.0f, 2.5f, 8.0f), 90, 0.035f, 0.6f,
                      glm::vec3(4.0f, 3.6f, 1.6f), 3.0f);
         m_glow.motes(l.start + alt + glm::vec3(0.0f, 2.0f, 20.0f), glm::vec3(30.0f, 2.0f, 30.0f), 160, 0.03f, 1.0f,
                      glm::vec3(3.0f, 2.6f, 1.4f), 5.0f);
-        for (const glm::vec3& light : l.lights) {
-            const glm::vec3 p = light + alt + glm::vec3(0.0f, 0.12f * std::sin(m_time * 1.7f + light.x), 0.0f);
-            m_glow.sprite(p, 0.7f, glm::vec3(2.2f, 1.9f, 1.2f), 0.6f);
+        // The drifting lights; a gathered one flies into the cape and fades.
+        const glm::vec3 chest = feet + glm::vec3(0.0f, 0.75f, 0.0f);
+        for (std::size_t i = 0; i < l.lights.size(); ++i) {
+            const glm::vec3 light = l.lights[i];
+            glm::vec3 p = light + alt + glm::vec3(0.0f, 0.12f * std::sin(m_time * 1.7f + light.x), 0.0f);
+            const float age = m_journey.lightAge(i);
+            if (age > 0.6f) continue;
+            float size = 0.7f;
+            if (age >= 0.0f) {
+                const float t = smoothstep(0.0f, 0.6f, age);
+                p = glm::mix(p, chest, t);
+                size *= 1.0f - t * 0.8f;
+            }
+            m_glow.sprite(p, size, glm::vec3(2.2f, 1.9f, 1.2f), 0.6f);
         }
+        // Flames: the lanterns and the lit candles.
+        for (const glm::vec3& lantern : l.lanterns)
+            m_glow.sprite(lantern + alt, 1.3f + 0.08f * std::sin(m_time * 9.0f + lantern.x),
+                          glm::vec3(2.4f, 1.5f, 0.6f), 0.15f);
+        for (std::size_t i = 0; i < l.candles.size(); ++i)
+            if (m_journey.candleLit(i))
+                m_glow.sprite(l.candles[i] + alt + glm::vec3(0.0f, 0.08f, 0.0f),
+                              1.1f + 0.08f * std::sin(m_time * 11.0f + float(i)), glm::vec3(2.4f, 1.5f, 0.6f), 0.15f);
     }
 
     void ui(App& app) override {
@@ -317,8 +359,11 @@ public:
 
     void render(App& app, app::Frame& frame) override {
         (void)app;
-        const render::View view{.view = viewMatrix(), .fovY = glm::radians(52.0f + 8.0f * m_player.glide()), .nearPlane = 0.1f,
-                                .cut = m_cut, .time = double(m_time)};
+        const render::View view{.view = viewMatrix(),
+                                .fovY = glm::radians(52.0f + 8.0f * m_player.glide()),
+                                .nearPlane = 0.1f,
+                                .cut = m_cut,
+                                .time = double(m_time)};
         m_cut = false;
         m_renderer->render(*m_scene, view, frame.commands, frame.target, frame.output);
     }
@@ -342,11 +387,23 @@ public:
         if (name == "energy") return m_player.energy;
         if (name == "max_energy") return m_player.maxEnergy;
         if (name == "glow_draws") return m_glow.draws();
+        if (name == "lights") return double(m_journey.lightsTaken());
+        if (name == "candles") return double(m_journey.candlesLit());
+        if (name == "warm") return m_journey.warm() ? 1.0 : 0.0;
+        if (name == "cape_up") return m_figure.capePoint(kCapeRows - 1).y - m_figure.capePoint(0).y;
+        if (name == "cape_back") {
+            const glm::vec3 d = m_figure.capePoint(kCapeRows - 1) - m_figure.capePoint(0);
+            return -(d.x * std::sin(m_player.yaw()) + d.z * std::cos(m_player.yaw()));
+        }
+        if (name == "vx")
+            return m_player.velocity().x * std::sin(m_player.yaw()) + m_player.velocity().z * std::cos(m_player.yaw());
+        if (name == "vy") return m_player.velocity().y;
         return std::nullopt;
     }
 
-    // teleport X Y Z [YAW]: the player to a local point. camera YAW PITCH DISTANCE: the orbit. view EX EY EZ TX TY TZ:
-    // a fixed camera (local points); view off: the orbit again. move X Y: hold the stick; jump down|up.
+    // teleport X Y Z [YAW]: the player to a local point. camera YAW PITCH DISTANCE: the orbit (orbit: its yaw from
+    // behind the player). view EX EY EZ TX TY TZ:
+    // a fixed camera (local points); view off: the orbit again. move X Y: hold the stick; jump down|up; call.
     app::ScenarioExec scenarioCommand(App& app, const app::ScenarioCommand& command) override {
         (void)app;
         const auto& a = command.args;
@@ -362,11 +419,10 @@ public:
             m_cut = true;
             return app::ScenarioExec::Done;
         }
-        if (command.op == "camera" && a.size() >= 3) {
-            m_camera.yaw = f(0);
-            m_camera.pitch = f(1);
+        if ((command.op == "camera" || command.op == "orbit") && a.size() >= 3) {
+            const float yaw = command.op == "orbit" ? wrapAngle(m_player.yaw() + f(0)) : f(0);
             m_camera.distance = f(2);
-            m_camera.reset(m_current + glm::vec3(0.0f, 1.05f, 0.0f), f(0));
+            m_camera.reset(m_current + glm::vec3(0.0f, 1.05f, 0.0f), yaw);
             m_camera.pitch = f(1);
             m_cut = true;
             return app::ScenarioExec::Done;
@@ -384,6 +440,10 @@ public:
         }
         if (command.op == "move" && a.size() >= 2) {
             m_scriptMove = glm::vec2(f(0), f(1));
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "call" && a.empty()) {
+            m_scriptCall = true;
             return app::ScenarioExec::Done;
         }
         if (command.op == "jump" && a.size() == 1) {
@@ -415,7 +475,8 @@ public:
 private:
     glm::vec3 eye() const { return m_scriptCamera ? m_scriptCamera->first : m_camera.eye(); }
     glm::mat4 viewMatrix() const {
-        if (m_scriptCamera) return glm::lookAt(m_scriptCamera->first, m_scriptCamera->second, glm::vec3(0.0f, 1.0f, 0.0f));
+        if (m_scriptCamera)
+            return glm::lookAt(m_scriptCamera->first, m_scriptCamera->second, glm::vec3(0.0f, 1.0f, 0.0f));
         return m_camera.view();
     }
 
@@ -447,7 +508,10 @@ private:
     app::ActionId m_left = 0, m_right = 0, m_forward = 0, m_back = 0;
     app::ActionId m_lookLeft = 0, m_lookRight = 0, m_lookUp = 0, m_lookDown = 0;
     app::ActionId m_jump = 0, m_walk = 0, m_call = 0;
-    bool m_jumpWasDown = false;
+    bool m_jumpWasDown = false, m_callWasDown = false, m_scriptCall = false;
+    float m_callAge = 100.0f;
+    glm::vec3 m_callCentre{0.0f};
+    Journey m_journey;
     glm::vec2 m_scriptMove{0.0f};
     bool m_scriptJump = false;
 };

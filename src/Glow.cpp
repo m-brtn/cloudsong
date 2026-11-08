@@ -65,7 +65,8 @@ void Glow::motes(glm::vec3 centre, glm::vec3 half, int count, float size, float 
 
 void Glow::sprite(glm::vec3 at, float radius, glm::vec3 color, float core) {
     // Sprites share a draw until it is full.
-    if (m_draws.empty() || m_draws.back().color.w != float(CS_GLOW_SPRITES) || m_vertices.back() >= CS_MAX_SPRITES * 6) {
+    if (m_draws.empty() || m_draws.back().color.w != float(CS_GLOW_SPRITES) ||
+        m_vertices.back() >= CS_MAX_SPRITES * 6) {
         quench::shader::GlowDraw d{};
         d.color = glm::vec4(1.0f, 1.0f, 1.0f, float(CS_GLOW_SPRITES));
         d.params = glm::vec4(0.0f, m_time, 0.0f, 0.0f);

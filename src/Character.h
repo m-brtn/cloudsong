@@ -18,16 +18,16 @@
 namespace cloudsong {
 
 struct CharacterLook {
-    glm::vec3 cape = srgb(226, 96, 70);    // linear
+    glm::vec3 cape = srgb(226, 96, 70); // linear
     glm::vec3 capeInner = srgb(150, 50, 44);
     glm::vec3 hood = srgb(200, 76, 62);
     glm::vec3 body = srgb(236, 228, 212); // the tunic and the sleeves
     glm::vec3 legs = srgb(64, 56, 70);
     glm::vec3 face = srgb(252, 249, 244); // a pale mask
     glm::vec3 boots = srgb(92, 62, 48);
-    float scale = 1.0f;     // 1: a child about 1.2 m tall with the hood
+    float scale = 1.0f;      // 1: a child about 1.2 m tall with the hood
     float capeLength = 1.0f; // relative
-    bool longHood = true;   // the hood's tip falls back
+    bool longHood = true;    // the hood's tip falls back
 };
 
 enum Joint : int {
@@ -63,15 +63,15 @@ struct CharacterMesh {
 
 // What drives a pose this frame.
 struct PoseInput {
-    float speed = 0.0f;    // horizontal speed (m/s)
+    float speed = 0.0f; // horizontal speed (m/s)
     bool grounded = true;
     float verticalSpeed = 0.0f;
-    float glide = 0.0f;    // 0..1: the glide pose
-    float flap = 0.0f;     // 0..1: time into a flap's stroke (0 or 1: none)
-    float sit = 0.0f;      // 0..1: sitting (a dormant spirit, the ending)
-    float pray = 0.0f;     // 0..1: arms raised (calling)
+    float glide = 0.0f;              // 0..1: the glide pose
+    float flap = 0.0f;               // 0..1: time into a flap's stroke (0 or 1: none)
+    float sit = 0.0f;                // 0..1: sitting (a dormant spirit, the ending)
+    float pray = 0.0f;               // 0..1: arms raised (calling)
     std::optional<glm::vec3> lookAt; // world point
-    glm::vec3 wind{0.0f};  // the air's velocity at the figure (m/s)
+    glm::vec3 wind{0.0f};            // the air's velocity at the figure (m/s)
 };
 
 // The ground below a world point: its height (m), or nothing when there is none within reach.
@@ -95,10 +95,12 @@ public:
     std::span<const glm::mat4> palette() const { return m_palette; }
     glm::vec3 jointWorld(Joint joint) const;
     float scale() const { return m_look.scale; }
+    // The middle of the collar and of the hem (world).
+    glm::vec3 capePoint(int row) const { return m_cloth[std::size_t(row * kCapeCols + kCapeCols / 2)]; }
 
 private:
     void forward(const std::array<glm::quat, kBodyJoints>& local, glm::vec3 hipsOffset);
-    void simulateCape(float dt, glm::vec3 wind);
+    void simulateCape(float dt, glm::vec3 wind, float wings);
 
     CharacterLook m_look;
     std::array<glm::vec3, kJointCount> m_bind{}; // bind pose joint positions (model space)

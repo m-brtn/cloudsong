@@ -31,8 +31,8 @@ constexpr std::array<glm::vec3, kBodyJoints> kRest = {{
 }};
 
 constexpr std::array<int, kBodyJoints> kParent = {
-    -1, kRoot, kHips, kSpine, kChest, kNeck, kHips, kLUpLeg, kLLeg, kHips, kRUpLeg, kRLeg,
-    kChest, kLArm, kLForearm, kChest, kRArm, kRForearm,
+    -1,    kRoot,   kHips, kSpine, kChest, kNeck,     kHips,  kLUpLeg, kLLeg,
+    kHips, kRUpLeg, kRLeg, kChest, kLArm,  kLForearm, kChest, kRArm,   kRForearm,
 };
 
 int capeJoint(int row, int col) { return kBodyJoints + row * kCapeCols + col; }
@@ -108,8 +108,8 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
     CharacterMesh out;
     // The tunic: from a flared hem over the thighs to the neck, bending with the hips, the spine and the chest.
     {
-        const std::vector<glm::vec2> profile = {{1e-4f, 0.33f}, {0.125f, 0.335f}, {0.115f, 0.40f}, {0.098f, 0.50f},
-                                                {0.094f, 0.60f}, {0.104f, 0.72f}, {0.095f, 0.79f}, {0.06f, 0.85f},
+        const std::vector<glm::vec2> profile = {{1e-4f, 0.33f},  {0.125f, 0.335f}, {0.115f, 0.40f}, {0.098f, 0.50f},
+                                                {0.094f, 0.60f}, {0.104f, 0.72f},  {0.095f, 0.79f}, {0.06f, 0.85f},
                                                 {0.042f, 0.89f}, {1e-4f, 0.91f}};
         MeshData torso = lathe(profile, 18, glm::vec4(look.body, 1.0f));
         for (Vertex& v : torso.vertices) v.position.z *= 0.82f;
@@ -129,8 +129,8 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
           kHead);
     for (const float side : {-1.0f, 1.0f})
         solid(out, ellipsoid({0.014f, 0.022f, 0.01f}, 6, 8),
-              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.042f, 0.004f, 0.1f)),
-              srgb(40, 34, 44), kHead);
+              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.042f, 0.004f, 0.1f)), srgb(40, 34, 44),
+              kHead);
     {
         MeshData hood = ellipsoid({0.142f, 0.15f, 0.148f}, 14, 22);
         MeshData shell;
@@ -143,8 +143,7 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
                 open = open && p.z > 0.42f && p.y < 0.55f && p.y > -0.75f;
             }
             if (!open)
-                shell.indices.insert(shell.indices.end(),
-                                     {hood.indices[i], hood.indices[i + 1], hood.indices[i + 2]});
+                shell.indices.insert(shell.indices.end(), {hood.indices[i], hood.indices[i + 1], hood.indices[i + 2]});
         }
         solid(out, shell, glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, 0.02f, -0.018f)), look.hood,
               kHead);
@@ -160,15 +159,17 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
         MeshData tip;
         const int sides = 10;
         for (int i = 0; i <= n; ++i) {
-            const glm::vec3 dir = glm::normalize(spine[std::size_t(std::min(i + 1, n))] - spine[std::size_t(std::max(i - 1, 0))]);
+            const glm::vec3 dir =
+                glm::normalize(spine[std::size_t(std::min(i + 1, n))] - spine[std::size_t(std::max(i - 1, 0))]);
             const glm::mat4 frame = alignY(dir);
             const float t = float(i) / float(n);
             const float r = 0.085f * (1.0f - t) * (1.0f - 0.3f * t) + 0.004f;
             for (int s = 0; s <= sides; ++s) {
                 const float a = kTau * float(s) / float(sides);
-                const glm::vec3 offset = glm::vec3(frame * glm::vec4(std::cos(a) * r, 0.0f, std::sin(a) * r * 0.8f, 0.0f));
-                tip.vertices.push_back({.position = spine[std::size_t(i)] + offset,
-                                        .color = glm::vec4(look.hood, 1.0f)});
+                const glm::vec3 offset =
+                    glm::vec3(frame * glm::vec4(std::cos(a) * r, 0.0f, std::sin(a) * r * 0.8f, 0.0f));
+                tip.vertices.push_back(
+                    {.position = spine[std::size_t(i)] + offset, .color = glm::vec4(look.hood, 1.0f)});
             }
         }
         for (int i = 0; i < n; ++i)
@@ -184,8 +185,7 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
     for (const int side : {0, 1}) {
         const int up = side == 0 ? kLUpLeg : kRUpLeg;
         limb(out, kRest[std::size_t(up)], kRest[std::size_t(up + 1)], 0.036f, 0.03f, look.legs, up, kHips, up + 1);
-        limb(out, kRest[std::size_t(up + 1)], kRest[std::size_t(up + 2)], 0.03f, 0.026f, look.legs, up + 1, up,
-             up + 2);
+        limb(out, kRest[std::size_t(up + 1)], kRest[std::size_t(up + 2)], 0.03f, 0.026f, look.legs, up + 1, up, up + 2);
         solid(out, ellipsoid({0.038f, 0.034f, 0.062f}, 8, 12),
               glm::translate(glm::mat4(1.0f), kRest[std::size_t(up + 2)] + glm::vec3(0.0f, -0.025f, 0.022f)),
               look.boots, up + 2);
@@ -239,7 +239,8 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
         // Outward: away from the body.
         glm::vec3 probe = cape.vertices[std::size_t(cols * (rows / 2) + cols / 2)].normal;
         if (probe.z > 0.0f) {
-            for (std::size_t i = 0; i + 2 < cape.indices.size(); i += 3) std::swap(cape.indices[i + 1], cape.indices[i + 2]);
+            for (std::size_t i = 0; i + 2 < cape.indices.size(); i += 3)
+                std::swap(cape.indices[i + 1], cape.indices[i + 2]);
             computeNormals(cape);
         }
         const auto first = std::uint32_t(out.mesh.vertices.size());
@@ -259,15 +260,15 @@ Character::Character(const CharacterLook& look) : m_look(look) {
     }
     for (int r = 0; r < kCapeRows; ++r)
         for (int c = 0; c < kCapeCols; ++c) {
-            const glm::vec3 p = capeRest(float(c) / float(kCapeCols - 1), float(r) / float(kCapeRows - 1),
-                                         look.capeLength);
+            const glm::vec3 p =
+                capeRest(float(c) / float(kCapeCols - 1), float(r) / float(kCapeRows - 1), look.capeLength);
             m_bind[std::size_t(capeJoint(r, c))] = p;
             m_clothRest[std::size_t(r * kCapeCols + c)] = p;
         }
     m_rowLength = glm::distance(m_clothRest[0], m_clothRest[kCapeCols]);
     for (int r = 0; r < kCapeRows; ++r)
-        m_rowWidth[std::size_t(r)] = glm::distance(m_clothRest[std::size_t(r * kCapeCols)],
-                                                   m_clothRest[std::size_t(r * kCapeCols + 1)]);
+        m_rowWidth[std::size_t(r)] =
+            glm::distance(m_clothRest[std::size_t(r * kCapeCols)], m_clothRest[std::size_t(r * kCapeCols + 1)]);
     m_palette.assign(kJointCount, glm::mat4(1.0f));
     for (glm::mat4& m : m_model) m = glm::mat4(1.0f);
 }
@@ -280,12 +281,11 @@ void Character::setPlacement(glm::vec3 feet, float yaw, float pitch) {
     m_world = glm::translate(glm::mat4(1.0f), feet) * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
               glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, pivot, 0.0f)) *
               glm::rotate(glm::mat4(1.0f), pitch, glm::vec3(1.0f, 0.0f, 0.0f)) *
-              glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -pivot, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(m_look.scale));
+              glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -pivot, 0.0f)) *
+              glm::scale(glm::mat4(1.0f), glm::vec3(m_look.scale));
 }
 
-glm::vec3 Character::jointWorld(Joint joint) const {
-    return glm::vec3(m_world * m_model[std::size_t(joint)][3]);
-}
+glm::vec3 Character::jointWorld(Joint joint) const { return glm::vec3(m_world * m_model[std::size_t(joint)][3]); }
 
 void Character::resetCape() {
     for (std::size_t i = 0; i < m_cloth.size(); ++i) {
@@ -332,7 +332,8 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
         const float lean = move * (0.04f + 0.16f * run);
         e[kHips] += glm::vec3(lean, 0.1f * move * std::sin(ph), 0.035f * move * std::cos(ph)) * walk;
         e[kSpine] += glm::vec3(0.05f * run * move, -0.08f * move * std::sin(ph), 0.0f) * walk;
-        e[kChest] += glm::vec3(0.025f * breath * (1.0f - move) + 0.04f * run * move, -0.06f * move * std::sin(ph), 0.0f) * walk;
+        e[kChest] +=
+            glm::vec3(0.025f * breath * (1.0f - move) + 0.04f * run * move, -0.06f * move * std::sin(ph), 0.0f) * walk;
         e[kHead] += glm::vec3(-0.8f * lean - 0.03f * breath * (1.0f - move), 0.0f, 0.0f) * walk;
         hips.y += (-0.012f * move + (0.01f + 0.018f * run) * move * std::cos(2.0f * ph)) * walk;
         for (int side = 0; side < 2; ++side) {
@@ -481,7 +482,7 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
 
     // The cape follows the shoulders.
     if (!m_clothValid || glm::distance(m_feet, m_lastFeet) > 3.0f) resetCape();
-    simulateCape(dt, in.wind);
+    simulateCape(dt, in.wind, std::max(glide, in.flap > 0.0f && in.flap < 1.0f ? std::sin(kPi * in.flap) : 0.0f));
     m_lastFeet = m_feet;
 
     const glm::mat4 toModel = glm::inverse(m_world);
@@ -511,11 +512,12 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
         }
 }
 
-void Character::simulateCape(float dt, glm::vec3 wind) {
+void Character::simulateCape(float dt, glm::vec3 wind, float wings) {
     const float scale = m_look.scale;
     dt = std::min(dt, 1.0f / 30.0f);
     // The collar follows the chest: the top row is pinned to its bind place in the chest's frame.
     const glm::mat4 chest = m_world * m_model[kChest] * glm::translate(glm::mat4(1.0f), -kRest[kChest]);
+    const glm::vec3 collarBefore = m_cloth[std::size_t(kCapeCols / 2)];
     for (int c = 0; c < kCapeCols; ++c) {
         m_cloth[std::size_t(c)] = glm::vec3(chest * glm::vec4(m_clothRest[std::size_t(c)], 1.0f));
         m_clothPrev[std::size_t(c)] = m_cloth[std::size_t(c)];
@@ -537,14 +539,18 @@ void Character::simulateCape(float dt, glm::vec3 wind) {
         {world(kHead, {0.0f, 0.1f, -0.01f}), 0.15f * scale},
     }};
     const glm::vec3 gravity(0.0f, -9.81f, 0.0f);
-    const float damping = 0.985f;
+    // Swinging against the body dies out quickly (the cloth's own stiffness and the air), the same at any frame rate.
+    const glm::vec3 collarVelocity = glm::length(m_cloth[std::size_t(kCapeCols / 2)] - collarBefore) < 1.0f
+                                         ? (m_cloth[std::size_t(kCapeCols / 2)] - collarBefore) / std::max(dt, 1e-4f)
+                                         : glm::vec3(0.0f);
+    const float settle = std::exp(-2.5f * dt);
     for (int i = kCapeCols; i < kCapeCols * kCapeRows; ++i) {
         glm::vec3& p = m_cloth[std::size_t(i)];
         glm::vec3& q = m_clothPrev[std::size_t(i)];
-        const glm::vec3 velocity = (p - q) / std::max(dt, 1e-4f);
+        const glm::vec3 velocity = collarVelocity + ((p - q) / std::max(dt, 1e-4f) - collarVelocity) * settle;
         // Drag toward the air's motion: the cape streams behind a running or gliding figure and flutters in the wind.
-        const glm::vec3 drag = (wind - velocity) * 1.6f;
-        const glm::vec3 next = p + (p - q) * damping + (gravity + drag) * (dt * dt);
+        const glm::vec3 drag = (wind - velocity) * (1.4f + 1.2f * wings);
+        const glm::vec3 next = p + velocity * dt + (gravity + drag) * (dt * dt);
         q = p;
         p = next;
     }
@@ -568,22 +574,27 @@ void Character::simulateCape(float dt, glm::vec3 wind) {
                 }
             }
         for (int r = 1; r < kCapeRows; ++r) {
-            const float width = m_rowWidth[std::size_t(r)] * scale;
+            // Spread as wings, the gathered cape opens wide between the arms.
+            const float spread = 1.0f + wings * (r == 1 ? 0.3f : r == 2 ? 0.6f : 0.8f);
+            const float width = m_rowWidth[std::size_t(r)] * scale * spread;
             for (int c = 0; c + 1 < kCapeCols; ++c) {
                 glm::vec3& a = m_cloth[std::size_t(r * kCapeCols + c)];
                 glm::vec3& b = m_cloth[std::size_t(r * kCapeCols + c + 1)];
                 const glm::vec3 d = b - a;
                 const float l = glm::length(d);
                 if (l < 1e-6f) continue;
-                // Cloth resists stretching more than it resists folding.
-                const float target = l < width ? glm::mix(l, width, 0.3f) : width;
+                // Cloth resists stretching more than it resists folding (less so spread as wings).
+                const float target = l < width ? glm::mix(l, width, 0.3f + 0.6f * wings) : width;
                 const glm::vec3 corr = d * ((l - target) / l) * 0.5f;
                 a += corr;
                 b -= corr;
             }
         }
         for (int i = kCapeCols; i < kCapeCols * kCapeRows; ++i)
-            for (const Sphere& s : body) {
+            for (std::size_t b = 0; b < body.size(); ++b) {
+                // The hood only holds off the cape's top; tipped back in a glide it would lift all of it.
+                if (b + 1 == body.size() && i >= 2 * kCapeCols) break;
+                const Sphere& s = body[b];
                 glm::vec3& p = m_cloth[std::size_t(i)];
                 const glm::vec3 d = p - s.c;
                 const float l = glm::length(d);

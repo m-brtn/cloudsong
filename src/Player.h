@@ -15,8 +15,8 @@
 namespace cloudsong {
 
 struct PlayerInput {
-    glm::vec2 move{0.0f};  // stick: x right, y forward, length 0..1
-    bool walk = false;     // slower
+    glm::vec2 move{0.0f}; // stick: x right, y forward, length 0..1
+    bool walk = false;    // slower
     bool jumpPressed = false;
     bool jumpHeld = false;
     float cameraYaw = 0.0f; // the camera's heading (radians; 0 looks along +z)
@@ -34,15 +34,15 @@ public:
     glm::vec3 velocity() const { return m_velocity; }
     float yaw() const { return m_yaw; }
     bool grounded() const { return m_grounded; }
-    float glide() const { return m_glide; }  // 0..1
+    float glide() const { return m_glide; } // 0..1
     float flap() const { return m_flapTime < kFlapDuration ? m_flapTime / kFlapDuration : 0.0f; }
     bool flapped() const { return m_flappedThisStep; }
     bool jumped() const { return m_jumpedThisStep; }
     bool landed() const { return m_landedThisStep; }
     float airTime() const { return m_airTime; }
 
-    float energy = 3.0f; // marks of the cape lit (fractional while recharging)
-    int maxEnergy = 3;
+    float energy = 2.0f; // marks of the cape lit (fractional while recharging)
+    int maxEnergy = 2;
 
     static constexpr float kFlapDuration = 0.5f;
 

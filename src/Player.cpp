@@ -16,8 +16,8 @@ constexpr float kRunSpeed = 4.6f;
 constexpr float kWalkSpeed = 1.9f;
 constexpr float kJumpSpeed = 6.2f;
 constexpr float kFlapSpeed = 7.4f;
-constexpr float kGlideFall = 1.45f;
-constexpr float kGlideSpeed = 7.2f;
+constexpr float kGlideFall = 1.2f;
+constexpr float kGlideSpeed = 7.6f;
 
 JPH::Vec3 toJolt(glm::vec3 v) { return {v.x, v.y, v.z}; }
 glm::vec3 toGlm(JPH::Vec3 v) { return {v.GetX(), v.GetY(), v.GetZ()}; }
@@ -37,11 +37,11 @@ float turnToward(float yaw, float target, float rate) {
 
 void Player::create(quench::PhysicsWorld& physics, glm::vec3 position, float yaw) {
     JPH::Ref<JPH::CharacterVirtualSettings> settings = new JPH::CharacterVirtualSettings();
-    settings->mShape = JPH::RotatedTranslatedShapeSettings(JPH::Vec3(0.0f, kHalfHeight + kRadius, 0.0f),
-                                                           JPH::Quat::sIdentity(),
-                                                           new JPH::CapsuleShape(kHalfHeight, kRadius))
-                           .Create()
-                           .Get();
+    settings->mShape =
+        JPH::RotatedTranslatedShapeSettings(JPH::Vec3(0.0f, kHalfHeight + kRadius, 0.0f), JPH::Quat::sIdentity(),
+                                            new JPH::CapsuleShape(kHalfHeight, kRadius))
+            .Create()
+            .Get();
     settings->mMaxSlopeAngle = JPH::DegreesToRadians(52.0f);
     settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -kRadius);
     settings->mCharacterPadding = 0.02f;
@@ -100,7 +100,8 @@ void Player::step(float dt, const PlayerInput& in, quench::PhysicsWorld& physics
             m_flapTime = 0.0f;
             m_flappedThisStep = true;
         }
-        v.y -= kGravity * dt;
+        // Gliding holds most of the fall: the sink settles a little above kGlideFall.
+        v.y -= kGravity * dt * (1.0f - 0.9f * m_glide);
         const bool gliding = in.jumpHeld && v.y < 0.6f && m_flapTime > 0.32f && m_airTime > 0.18f;
         m_glide = approach(m_glide, gliding ? 1.0f : 0.0f, gliding ? 0.14f : 0.1f, dt);
         if (m_glide > 0.01f) {

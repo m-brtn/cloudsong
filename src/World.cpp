@@ -65,7 +65,12 @@ World::World() {
     // The region's layout (local coordinates; y up, +z toward the temple).
     m_isles = {
         // The meadow, where the journey starts: a hill to glide from, a pond, ruins.
-        {{{0.0f, 0.0f}, 0.0f, 46.0f, 3.5f, 34.0f, 11u,
+        {{{0.0f, 0.0f},
+          0.0f,
+          46.0f,
+          3.5f,
+          34.0f,
+          11u,
           {{{14.0f, 16.0f}, 16.0f, 7.0f, 0.12f},
            {{-27.0f, 12.0f}, 10.0f, 3.0f},
            {{-15.0f, -10.0f}, 8.5f, -2.4f, 0.45f},
@@ -74,11 +79,11 @@ World::World() {
         // The cave isle.
         {{{62.0f, 58.0f}, 3.0f, 30.0f, 2.0f, 28.0f, 23u, {{{64.0f, 63.0f}, 13.0f, 0.4f, 0.85f}}, 0.8f}},
         // Stepping stones toward the spirit isle.
-        {{{-36.0f, 46.0f}, 5.0f, 9.0f, 0.8f, 18.0f, 31u, {}, 1.4f}},
+        {{{-36.0f, 46.0f}, 3.0f, 9.0f, 0.8f, 18.0f, 31u, {}, 1.4f}},
         // The spirit isle.
-        {{{-62.0f, 90.0f}, 9.0f, 13.0f, 1.2f, 24.0f, 37u, {}, 1.2f}},
+        {{{-62.0f, 90.0f}, 1.5f, 13.0f, 1.2f, 24.0f, 37u, {}, 1.2f}},
         // The isle of the updraft.
-        {{{-20.0f, 128.0f}, 7.0f, 15.0f, 0.8f, 26.0f, 41u, {{{-20.0f, 128.0f}, 6.0f, 0.3f, 0.7f}}, 1.0f}},
+        {{{-20.0f, 128.0f}, 0.5f, 15.0f, 0.8f, 26.0f, 41u, {{{-20.0f, 128.0f}, 6.0f, 0.3f, 0.7f}}, 1.0f}},
         // The temple's mountain.
         {{{10.0f, 205.0f}, 44.0f, 40.0f, 3.0f, 52.0f, 53u, {{{10.0f, 218.0f}, 26.0f, 24.0f, 0.3f}}, 0.7f}},
         // Far isles that frame the view.
@@ -101,13 +106,14 @@ World::World() {
     l.caveCentre = ground(64.0f, 63.0f, 0.0f);
     l.caveRadius = 11.0f;
     l.caveShafts = {ground(62.0f, 61.0f, 0.0f), ground(67.5f, 66.0f, 0.0f), ground(60.5f, 67.5f, 0.0f)};
-    l.lights = {ground(-6.0f, -27.0f, 1.4f),  ground(18.0f, -10.0f, 1.5f), ground(-31.0f, 4.0f, 1.5f),
-                ground(14.0f, 16.0f, 2.2f),   ground(-10.0f, 22.0f, 1.4f), glm::vec3(36.0f, 12.0f, 36.0f),
-                ground(52.0f, 42.0f, 1.5f),   ground(76.0f, 70.0f, 1.5f),  ground(64.5f, 64.0f, 1.6f),
-                ground(-36.0f, 46.0f, 1.6f),  glm::vec3(-50.0f, 15.0f, 68.0f), ground(-58.0f, 96.0f, 1.5f),
-                ground(-24.0f, 122.0f, 1.5f), glm::vec3(-6.0f, 40.0f, 160.0f), ground(4.0f, 178.0f, 1.6f),
+    l.lights = {ground(-6.0f, -27.0f, 1.4f),    ground(18.0f, -10.0f, 1.5f),     ground(-31.0f, 4.0f, 1.5f),
+                ground(14.0f, 16.0f, 2.2f),     ground(-10.0f, 22.0f, 1.4f),     glm::vec3(36.0f, 12.0f, 36.0f),
+                ground(52.0f, 42.0f, 1.5f),     ground(76.0f, 70.0f, 1.5f),      ground(64.5f, 64.0f, 1.6f),
+                glm::vec3(-28.4f, 3.4f, 36.2f), glm::vec3(-50.0f, 5.0f, 68.0f),  ground(-58.0f, 96.0f, 1.5f),
+                ground(-24.0f, 122.0f, 1.5f),   glm::vec3(-6.0f, 97.0f, 160.0f), ground(4.0f, 178.0f, 1.6f),
                 ground(22.0f, 206.0f, 1.6f)};
     l.candles = {ground(8.0f, -19.0f, 1.05f), ground(68.0f, 67.0f, 1.05f), ground(-58.0f, 93.0f, 1.05f)};
+    l.lanterns = {ground(5.0f, -33.0f, 1.05f), ground(-33.5f, 42.5f, 1.05f), ground(-14.5f, 123.0f, 1.05f)};
     l.spirits = {ground(-21.5f, -16.0f, 0.0f), ground(59.5f, 64.5f, 0.0f), ground(-66.0f, 87.0f, 0.0f)};
     l.spiritYaw = {0.9f, 1.8f, 0.6f};
     l.updraft = ground(-20.0f, 128.0f, 0.0f);
@@ -163,10 +169,9 @@ void World::addStatic(quench::PhysicsWorld& physics, const MeshData& mesh) {
 }
 
 void World::addBox(quench::PhysicsWorld& physics, glm::vec3 centre, glm::vec3 half, float yaw) {
-    const JPH::BodyCreationSettings body(new JPH::BoxShape(JPH::Vec3(half.x, half.y, half.z), 0.02f),
-                                         JPH::RVec3(centre.x, centre.y, centre.z),
-                                         JPH::Quat::sRotation(JPH::Vec3::sAxisY(), yaw), JPH::EMotionType::Static,
-                                         quench::PhysicsLayers::kStatic);
+    const JPH::BodyCreationSettings body(
+        new JPH::BoxShape(JPH::Vec3(half.x, half.y, half.z), 0.02f), JPH::RVec3(centre.x, centre.y, centre.z),
+        JPH::Quat::sRotation(JPH::Vec3::sAxisY(), yaw), JPH::EMotionType::Static, quench::PhysicsLayers::kStatic);
     physics.bodies().CreateAndAddBody(body, JPH::EActivation::DontActivate);
 }
 
@@ -189,9 +194,8 @@ void World::buildIsle(render::Scene& scene, quench::PhysicsWorld& physics, const
             // Darker grass over the lip, a little earth at its very edge.
             color = lerpColor(color, color * 0.72f, smoothstep(0.88f, 1.0f, t));
             color = lerpColor(color, srgb(112, 92, 68), smoothstep(0.985f, 1.0f, t) * 0.7f);
-            mesh.vertices.push_back({.position = glm::vec3(xz.x, h, xz.y) + kAlt,
-                                     .uv = xz * 0.25f,
-                                     .color = glm::vec4(color, 1.0f)});
+            mesh.vertices.push_back(
+                {.position = glm::vec3(xz.x, h, xz.y) + kAlt, .uv = xz * 0.25f, .color = glm::vec4(color, 1.0f)});
             if (r == rings) rimY[std::size_t(s)] = h;
         }
     }
@@ -234,7 +238,8 @@ void World::buildIsle(render::Scene& scene, quench::PhysicsWorld& physics, const
     // Seams at angle 0: the duplicated column shares its neighbour's normal.
     for (int r = 0; r < rows; ++r) {
         const auto first = std::size_t(r * (segments + 1));
-        const glm::vec3 n = glm::normalize(mesh.vertices[first].normal + mesh.vertices[first + std::size_t(segments)].normal);
+        const glm::vec3 n =
+            glm::normalize(mesh.vertices[first].normal + mesh.vertices[first + std::size_t(segments)].normal);
         mesh.vertices[first].normal = n;
         mesh.vertices[first + std::size_t(segments)].normal = n;
     }
@@ -279,8 +284,9 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
             const int n = int(patch / step);
             for (int iz = 0; iz < n; ++iz)
                 for (int ix = 0; ix < n; ++ix) {
-                    const glm::vec2 p = corner + (glm::vec2(float(ix), float(iz)) +
-                                                  glm::vec2(random.uniform(), random.uniform())) * step;
+                    const glm::vec2 p =
+                        corner +
+                        (glm::vec2(float(ix), float(iz)) + glm::vec2(random.uniform(), random.uniform())) * step;
                     const glm::vec2 rel = p - d.centre;
                     const float t = glm::length(rel) / isle.outline(std::atan2(rel.y, rel.x));
                     if (t > 0.93f || excluded(p)) continue;
@@ -289,7 +295,8 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                     const bool far = (ix % 2 == 0) && (iz % 2 == 0);
                     const glm::vec3 base = isle.grassColor(p);
                     const float meadow = fbm(p / 9.0f, 2, d.seed + 29) * 0.5f + 0.5f;
-                    const float tall = glm::mix(0.12f, 0.32f, smoothstep(0.2f, 0.8f, meadow)) * (1.0f - 0.5f * smoothstep(0.8f, 0.93f, t));
+                    const float tall = glm::mix(0.12f, 0.32f, smoothstep(0.2f, 0.8f, meadow)) *
+                                       (1.0f - 0.5f * smoothstep(0.8f, 0.93f, t));
                     const glm::vec3 root(p.x - origin.x, *h - origin.y, p.y - origin.z);
                     const int blades = 5;
                     for (int b = 0; b < blades; ++b) {
@@ -302,7 +309,8 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                         const glm::vec3 offset(dir.x * 0.04f * float(b), 0.0f, dir.y * 0.04f * float(b));
                         const glm::vec3 r0 = root + offset * 0.5f;
                         const glm::vec3 tip = r0 + glm::vec3(dir.x * lean, height, dir.y * lean);
-                        const glm::vec3 tipColor = base * glm::vec3(1.35f, 1.32f, 1.12f) + glm::vec3(0.03f, 0.03f, 0.01f);
+                        const glm::vec3 tipColor =
+                            base * glm::vec3(1.35f, 1.32f, 1.12f) + glm::vec3(0.03f, 0.03f, 0.01f);
                         const glm::vec3 rootColor = base * 0.6f;
                         const glm::vec3 up = glm::normalize(glm::vec3(dir.x * 0.25f, 1.0f, dir.y * 0.25f));
                         auto blade = [&](MeshData& m, float w) {
@@ -330,29 +338,35 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                         const glm::vec3 color = petals[std::size_t(random.range(int(petals.size())))];
                         const float height = tall * random.uniform(1.0f, 1.5f) + 0.05f;
                         const float size = random.uniform(0.035f, 0.06f);
-                        const glm::vec3 head = root + glm::vec3(random.uniform(-0.03f, 0.03f), height, random.uniform(-0.03f, 0.03f));
+                        const glm::vec3 head =
+                            root + glm::vec3(random.uniform(-0.03f, 0.03f), height, random.uniform(-0.03f, 0.03f));
                         auto flower = [&](MeshData& m) {
                             auto first = std::uint32_t(m.vertices.size());
                             // The stem.
-                            m.vertices.push_back({.position = root + glm::vec3(-0.006f, 0.0f, 0.0f), .uv = {0.0f, root.y},
+                            m.vertices.push_back({.position = root + glm::vec3(-0.006f, 0.0f, 0.0f),
+                                                  .uv = {0.0f, root.y},
                                                   .color = glm::vec4(base * 0.5f, 1.0f)});
-                            m.vertices.push_back({.position = root + glm::vec3(0.006f, 0.0f, 0.0f), .uv = {0.0f, root.y},
+                            m.vertices.push_back({.position = root + glm::vec3(0.006f, 0.0f, 0.0f),
+                                                  .uv = {0.0f, root.y},
                                                   .color = glm::vec4(base * 0.5f, 1.0f)});
-                            m.vertices.push_back({.position = head, .uv = {1.0f, root.y},
-                                                  .color = glm::vec4(base * 1.2f, 1.0f)});
+                            m.vertices.push_back(
+                                {.position = head, .uv = {1.0f, root.y}, .color = glm::vec4(base * 1.2f, 1.0f)});
                             m.indices.insert(m.indices.end(), {first, first + 1, first + 2});
                             // The head: five petals around a yellow eye, facing up.
                             first = std::uint32_t(m.vertices.size());
-                            m.vertices.push_back({.position = head + glm::vec3(0.0f, 0.004f, 0.0f), .normal = {0, 1, 0},
-                                                  .uv = {3.0f, root.y}, .color = glm::vec4(srgb(255, 200, 60), 1.0f)});
+                            m.vertices.push_back({.position = head + glm::vec3(0.0f, 0.004f, 0.0f),
+                                                  .normal = {0, 1, 0},
+                                                  .uv = {3.0f, root.y},
+                                                  .color = glm::vec4(srgb(255, 200, 60), 1.0f)});
                             const float spin = random.uniform(0.0f, kTau);
                             for (int k = 0; k < 10; ++k) {
                                 const float a = spin + kTau * float(k) / 10.0f;
                                 const float rr = (k % 2 == 0 ? 1.0f : 0.45f) * size;
-                                m.vertices.push_back({.position = head + glm::vec3(std::cos(a) * rr, 0.0f, std::sin(a) * rr),
-                                                      .normal = {0, 1, 0},
-                                                      .uv = {3.0f, root.y},
-                                                      .color = glm::vec4(color, 1.0f)});
+                                m.vertices.push_back(
+                                    {.position = head + glm::vec3(std::cos(a) * rr, 0.0f, std::sin(a) * rr),
+                                     .normal = {0, 1, 0},
+                                     .uv = {3.0f, root.y},
+                                     .color = glm::vec4(color, 1.0f)});
                             }
                             for (int k = 0; k < 10; ++k)
                                 m.indices.insert(m.indices.end(), {first, first + 1 + std::uint32_t((k + 1) % 10),
@@ -369,12 +383,19 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
             const glm::vec4 custom(0.35f, 1.0f, 0.012f, 0.0f);
             Result<render::MeshId> nearId = scene.addMesh(nearMesh.desc("grass"));
             if (!nearId) continue;
-            pt.near = scene.addInstance({.mesh = *nearId, .material = m_grass, .transform = transform, .custom = custom,
+            pt.near = scene.addInstance({.mesh = *nearId,
+                                         .material = m_grass,
+                                         .transform = transform,
+                                         .custom = custom,
                                          .castsShadows = false});
             if (!farMesh.indices.empty()) {
                 if (Result<render::MeshId> farId = scene.addMesh(farMesh.desc("grass far")))
-                    pt.far = scene.addInstance({.mesh = *farId, .material = m_grass, .transform = transform,
-                                                .custom = custom, .visible = false, .castsShadows = false});
+                    pt.far = scene.addInstance({.mesh = *farId,
+                                                .material = m_grass,
+                                                .transform = transform,
+                                                .custom = custom,
+                                                .visible = false,
+                                                .castsShadows = false});
             }
             m_patches.push_back(pt);
         }
@@ -391,8 +412,9 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
         if (collide) addBox(physics, centre + kAlt, half, yaw);
     };
     auto column = [&](glm::vec3 base, float height, float radius, bool broken) {
-        std::vector<glm::vec2> profile = {{1e-4f, 0.0f},           {radius * 1.35f, 0.0f}, {radius * 1.35f, 0.25f},
-                                          {radius * 1.1f, 0.32f},  {radius, 0.45f},        {radius * 0.92f, height - 0.35f}};
+        std::vector<glm::vec2> profile = {{1e-4f, 0.0f},           {radius * 1.35f, 0.0f},
+                                          {radius * 1.35f, 0.25f}, {radius * 1.1f, 0.32f},
+                                          {radius, 0.45f},         {radius * 0.92f, height - 0.35f}};
         if (!broken) {
             profile.insert(profile.end(), {{radius * 1.25f, height - 0.2f}, {radius * 1.35f, height}, {1e-4f, height}});
         } else {
@@ -405,14 +427,16 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
                     v.position.y += 0.25f * std::sin(v.position.x * 30.0f) * std::cos(v.position.z * 23.0f);
         computeNormals(c);
         append(stones, c, glm::translate(glm::mat4(1.0f), base + kAlt), glm::vec4(stoneColor(random), 1.0f));
-        addBox(physics, base + kAlt + glm::vec3(0.0f, height * 0.5f, 0.0f), glm::vec3(radius * 1.1f, height * 0.5f, radius * 1.1f), 0.0f);
+        addBox(physics, base + kAlt + glm::vec3(0.0f, height * 0.5f, 0.0f),
+               glm::vec3(radius * 1.1f, height * 0.5f, radius * 1.1f), 0.0f);
     };
     auto groundY = [&](float x, float z) { return terrainHeight({x, z}).value_or(0.0f); };
     auto arch = [&](glm::vec3 centre, float yaw, float span, float height) {
         const glm::vec3 across(std::cos(yaw), 0.0f, -std::sin(yaw));
         for (const float side : {-1.0f, 1.0f}) {
             const glm::vec3 p = centre + across * (span * 0.5f) * side;
-            block(glm::vec3(p.x, groundY(p.x, p.z) + height * 0.5f - 0.3f, p.z), glm::vec3(0.32f, height * 0.5f + 0.3f, 0.38f), yaw);
+            block(glm::vec3(p.x, groundY(p.x, p.z) + height * 0.5f - 0.3f, p.z),
+                  glm::vec3(0.32f, height * 0.5f + 0.3f, 0.38f), yaw);
         }
         // The curve: wedge blocks along a half circle.
         const int pieces = 9;
@@ -420,7 +444,8 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
         const float top = centre.y + height;
         for (int i = 0; i < pieces; ++i) {
             const float a = kPi * (float(i) + 0.5f) / float(pieces);
-            const glm::vec3 p = centre + across * (std::cos(a) * radius) + glm::vec3(0.0f, top - centre.y + std::sin(a) * radius * 0.8f, 0.0f);
+            const glm::vec3 p = centre + across * (std::cos(a) * radius) +
+                                glm::vec3(0.0f, top - centre.y + std::sin(a) * radius * 0.8f, 0.0f);
             MeshData b = render::boxMesh(glm::vec3(0.36f, 0.22f, 0.4f));
             const glm::mat4 m = glm::translate(glm::mat4(1.0f), p + kAlt) *
                                 glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -445,7 +470,9 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
     {
         MeshData drum = render::cylinderMesh(0.3f, 0.5f, 14);
         const glm::vec3 p(-8.0f, groundY(-8.0f, -15.0f) + 0.22f, -15.0f);
-        append(stones, drum, glm::translate(glm::mat4(1.0f), p + kAlt) * glm::rotate(glm::mat4(1.0f), 1.5f, glm::vec3(0.3f, 0.0f, 1.0f)),
+        append(stones, drum,
+               glm::translate(glm::mat4(1.0f), p + kAlt) *
+                   glm::rotate(glm::mat4(1.0f), 1.5f, glm::vec3(0.3f, 0.0f, 1.0f)),
                glm::vec4(stoneColor(random), 1.0f));
         addBox(physics, p + kAlt, glm::vec3(0.5f, 0.3f, 0.3f), 0.0f);
     }
@@ -456,8 +483,26 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
         for (int i = 0; i < 4; ++i) {
             const float a = 0.12f + kPi * 0.5f * float(i) + 0.785f;
             const glm::vec3 p = c + glm::vec3(std::cos(a), 0.0f, std::sin(a)) * 5.0f;
-            block(glm::vec3(p.x, groundY(p.x, p.z) + 0.4f, p.z), glm::vec3(0.9f, 0.55f + 0.3f * float(i % 2), 0.3f), -a + kPi * 0.5f);
+            block(glm::vec3(p.x, groundY(p.x, p.z) + 0.4f, p.z), glm::vec3(0.9f, 0.55f + 0.3f * float(i % 2), 0.3f),
+                  -a + kPi * 0.5f);
         }
+    }
+    // Stone lanterns: a post, a hollow head on four corners, a roof.
+    for (const glm::vec3& lantern : m_landmarks.lanterns) {
+        const float y = lantern.y - 1.05f;
+        block(glm::vec3(lantern.x, y + 0.42f, lantern.z), glm::vec3(0.16f, 0.5f, 0.16f), 0.2f);
+        block(glm::vec3(lantern.x, y + 0.86f, lantern.z), glm::vec3(0.27f, 0.05f, 0.27f), 0.2f, false);
+        for (int k = 0; k < 4; ++k) {
+            const float a = 0.2f + kPi * 0.5f * float(k) + kPi * 0.25f;
+            const glm::vec3 p =
+                glm::vec3(lantern.x, y + 1.06f, lantern.z) + glm::vec3(std::cos(a), 0.0f, -std::sin(a)) * 0.29f;
+            block(p, glm::vec3(0.045f, 0.16f, 0.045f), 0.2f, false);
+        }
+        MeshData roof = lathe({{1e-4f, 0.0f}, {0.42f, 0.0f}, {0.4f, 0.06f}, {1e-4f, 0.3f}}, 4);
+        append(stones, roof,
+               glm::translate(glm::mat4(1.0f), glm::vec3(lantern.x, y + 1.22f, lantern.z) + kAlt) *
+                   glm::rotate(glm::mat4(1.0f), 0.2f + kPi * 0.25f, glm::vec3(0.0f, 1.0f, 0.0f)),
+               glm::vec4(stoneColor(random), 1.0f));
     }
     // Candle pedestals.
     for (const glm::vec3& candle : m_landmarks.candles) {
@@ -468,9 +513,10 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
     // Slabs up the hill.
     for (int i = 0; i < 14; ++i) {
         const float t = float(i) / 13.0f;
-        const glm::vec2 p = glm::mix(glm::vec2(4.0f, 0.0f), glm::vec2(12.5f, 13.0f), t) +
-                            glm::vec2(std::sin(t * 6.0f) * 1.2f, 0.0f);
-        block(glm::vec3(p.x, groundY(p.x, p.y) + 0.02f, p.y), glm::vec3(0.55f, 0.12f, 0.4f), random.uniform(-0.3f, 0.3f) + 0.6f);
+        const glm::vec2 p =
+            glm::mix(glm::vec2(4.0f, 0.0f), glm::vec2(12.5f, 13.0f), t) + glm::vec2(std::sin(t * 6.0f) * 1.2f, 0.0f);
+        block(glm::vec3(p.x, groundY(p.x, p.y) + 0.02f, p.y), glm::vec3(0.55f, 0.12f, 0.4f),
+              random.uniform(-0.3f, 0.3f) + 0.6f);
     }
     for (int i = 0; i < 5; ++i) {
         const float a = kTau * float(i) / 5.0f;
@@ -507,7 +553,8 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
         MeshData collider;
         for (const auto& [radius, top] : tiers) {
             MeshData tier = render::cylinderMesh(radius, (top + 1.0f) * 0.5f, 24);
-            append(collider, tier, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, (top - 1.0f) * 0.5f, 0.0f)));
+            append(collider, tier,
+                   glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, (top - 1.0f) * 0.5f, 0.0f)));
         }
         addStatic(physics, collider);
         for (int i = 0; i < 10; ++i) {
@@ -541,7 +588,8 @@ Result<void> World::build(render::Scene& scene, quench::PhysicsWorld& physics, r
     m_grassDesc.params[0] = glm::vec4(0.0f, -1000.0f, 0.0f, 1000.0f);
     m_grass = scene.addMaterial(m_grassDesc);
     m_water = scene.addMaterial({.baseColor = {0.03f, 0.075f, 0.08f, 1.0f}, .roughness = 0.03f, .water = true});
-    m_flame = scene.addMaterial({.baseColor = {1.0f, 0.8f, 0.5f, 1.0f}, .emissive = {14.0f, 7.0f, 2.4f}, .shadows = render::ShadowMode::None});
+    m_flame = scene.addMaterial(
+        {.baseColor = {1.0f, 0.8f, 0.5f, 1.0f}, .emissive = {14.0f, 7.0f, 2.4f}, .shadows = render::ShadowMode::None});
     m_flameOff = scene.addMaterial({.baseColor = {0.9f, 0.86f, 0.78f, 1.0f}, .roughness = 0.6f});
 
     for (const Isle& isle : m_isles) buildIsle(scene, physics, isle);
@@ -567,12 +615,27 @@ Result<void> World::build(render::Scene& scene, quench::PhysicsWorld& physics, r
         Result<render::MeshId> flameId = scene.addMesh(flame.desc("flame"));
         if (waxId && flameId)
             for (const glm::vec3& c : m_landmarks.candles) {
-                scene.addInstance({.mesh = *waxId, .material = m_flameOff,
-                                   .transform = glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, -0.12f, 0.0f))});
-                m_flames.push_back(scene.addInstance({.mesh = *flameId, .material = m_flame,
-                                                      .transform = glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 0.07f, 0.0f)),
-                                                      .visible = false, .castsShadows = false}));
+                scene.addInstance(
+                    {.mesh = *waxId,
+                     .material = m_flameOff,
+                     .transform = glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, -0.12f, 0.0f))});
+                m_flames.push_back(scene.addInstance(
+                    {.mesh = *flameId,
+                     .material = m_flame,
+                     .transform = glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 0.07f, 0.0f)),
+                     .visible = false,
+                     .castsShadows = false}));
             }
+    }
+    // The lanterns' flames.
+    {
+        MeshData flame = ellipsoid({0.07f, 0.11f, 0.07f}, 8, 10);
+        if (Result<render::MeshId> id = scene.addMesh(flame.desc("lantern flame")))
+            for (const glm::vec3& c : m_landmarks.lanterns)
+                scene.addInstance({.mesh = *id,
+                                   .material = m_flame,
+                                   .transform = glm::translate(glm::mat4(1.0f), c + kAlt),
+                                   .castsShadows = false});
     }
     quench::log::info("game", "world: {} isles, {} grass patches", m_isles.size(), m_patches.size());
     return {};
@@ -580,8 +643,9 @@ Result<void> World::build(render::Scene& scene, quench::PhysicsWorld& physics, r
 
 void World::updateDetail(render::Scene& scene, glm::vec3 camera) {
     for (Patch& p : m_patches) {
-        const bool near = glm::distance(glm::vec2(p.centre.x, p.centre.z), glm::vec2(camera.x, camera.z)) < m_detailDistance ||
-                          !scene.contains(p.far);
+        const bool near =
+            glm::distance(glm::vec2(p.centre.x, p.centre.z), glm::vec2(camera.x, camera.z)) < m_detailDistance ||
+            !scene.contains(p.far);
         if (near == p.nearShown) continue;
         p.nearShown = near;
         scene.setVisible(p.near, near);

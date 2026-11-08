@@ -31,7 +31,7 @@ quench_add_game(cloudsong
     ICON icon/icon.png
     ASSETS assets
     ORIENTATIONS landscape
-    SOURCES src/Game.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Player.cpp)
+    SOURCES src/Game.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Journey.cpp src/Player.cpp)
 target_include_directories(cloudsong PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(cloudsong PRIVATE -Wall -Wextra)
@@ -46,5 +46,6 @@ quench_add_shaders(cloudsong NAME glow SOURCE shaders/glow.hlsl ENTRIES glow_vs:
 if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
     add_test(NAME smoke COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/smoke.txt)
-    set_tests_properties(smoke PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
+    add_test(NAME flight COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/flight.txt)
+    set_tests_properties(smoke flight PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
 endif()

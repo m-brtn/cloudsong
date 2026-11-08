@@ -21,7 +21,7 @@ inline constexpr float kAltitude = 2200.0f;
 struct Bump {
     glm::vec2 at;
     float radius;
-    float height; // negative: a hollow
+    float height;      // negative: a hollow
     float flat = 0.0f; // 0..1: share of the radius that is level at the top (a plateau, a pond's floor)
 };
 
@@ -39,22 +39,23 @@ struct IsleDesc {
 struct Isle {
     IsleDesc desc;
     std::optional<float> heightAt(glm::vec2 xz) const; // local height of the ground (m), none outside
-    float outline(float angle) const;                 // radius of the outline at an angle about the centre
-    glm::vec3 grassColor(glm::vec2 xz) const;         // linear
+    float outline(float angle) const;                  // radius of the outline at an angle about the centre
+    glm::vec3 grassColor(glm::vec2 xz) const;          // linear
 };
 
 // Places where the game puts things (local coordinates; world = local + (0, kAltitude, 0)).
 struct Landmarks {
-    glm::vec3 start;            // the player's first place
+    glm::vec3 start; // the player's first place
     float startYaw = 0.0f;
     std::vector<glm::vec3> lights;   // the drifting lights to collect
     std::vector<glm::vec3> candles;  // the candles (the flame's place)
+    std::vector<glm::vec3> lanterns; // stone lanterns that always burn (the flame's place)
     std::vector<glm::vec3> spirits;  // where the dormant spirits sit
     std::vector<float> spiritYaw;
-    glm::vec3 updraft;          // the wind that lifts to the temple once the candles burn
+    glm::vec3 updraft; // the wind that lifts to the temple once the candles burn
     float updraftRadius = 3.0f;
-    float updraftTop = 60.0f;   // local height the updraft lifts to
-    glm::vec3 altar;            // the temple's centre (the ending)
+    float updraftTop = 60.0f; // local height the updraft lifts to
+    glm::vec3 altar;          // the temple's centre (the ending)
     glm::vec3 beamBase;
     glm::vec3 caveCentre;
     float caveRadius = 11.0f;
