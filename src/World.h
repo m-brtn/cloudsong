@@ -105,6 +105,8 @@ private:
     };
 
     void buildIsle(quench::render::Scene& scene, quench::PhysicsWorld& physics, const Isle& isle);
+    // Grass over an isle's rim and roots and vines below it (`rimY`: the rim's height round the outline).
+    void buildHanging(quench::render::Scene& scene, const Isle& isle, const std::vector<float>& rimY);
     void buildFoliage(quench::render::Scene& scene, const Isle& isle, float density);
     void buildRuins(quench::render::Scene& scene, quench::PhysicsWorld& physics);
     void buildCave(quench::render::Scene& scene, quench::PhysicsWorld& physics);
@@ -122,8 +124,8 @@ private:
     std::vector<std::pair<glm::vec2, float>> m_clear; // circles without grass (ruins, the pond)
     std::vector<std::pair<glm::vec2, float>> m_stone; // circles of stone floor (footsteps)
     quench::render::SurfaceId m_worldSurface, m_foliageSurface;
-    quench::render::MaterialId m_terrain, m_stoneMaterial, m_grass, m_water, m_flame, m_flameOff, m_caveMaterial,
-        m_glowCap;
+    quench::render::MaterialId m_terrain, m_rock, m_stoneMaterial, m_grass, m_water, m_flame, m_flameOff,
+        m_caveMaterial, m_glowCap;
     std::vector<quench::render::InstanceId> m_flames;
     quench::render::MaterialDesc m_grassDesc;
     float m_detailDistance = 34.0f;

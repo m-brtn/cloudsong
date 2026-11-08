@@ -260,7 +260,6 @@ void World::buildIsle(render::Scene& scene, quench::PhysicsWorld& physics, const
     const IsleDesc& d = isle.desc;
     const int segments = std::max(48, int(d.radius * 3.2f));
     const int rings = std::max(12, int(d.radius * 1.0f));
-    const int under = 16;
     MeshData mesh;
     std::vector<float> rimY(std::size_t(segments + 1));
     // The top: rings of the outline from the centre out.
@@ -277,73 +276,196 @@ void World::buildIsle(render::Scene& scene, quench::PhysicsWorld& physics, const
             const float strata = fbm(glm::vec2(h * 0.8f, (xz.x + xz.y) * 0.05f), 2, d.seed + 41) * 0.5f + 0.5f;
             color = lerpColor(color, lerpColor(srgb(150, 138, 120), srgb(116, 108, 100), strata), rock);
             color *= shade(xz);
-            // Darker grass over the lip, a little earth at its very edge.
-            color = lerpColor(color, color * 0.72f, smoothstep(0.88f, 1.0f, t));
-            color = lerpColor(color, srgb(112, 92, 68), smoothstep(0.985f, 1.0f, t) * 0.7f);
+            // A little darker over the lip, where the grass bends over the edge.
+            color = lerpColor(color, color * 0.62f, smoothstep(0.9f, 1.0f, t));
             mesh.vertices.push_back(
                 {.position = glm::vec3(xz.x, h, xz.y) + kAlt, .uv = xz * 0.25f, .color = glm::vec4(color, 1.0f)});
             if (r == rings) rimY[std::size_t(s)] = h;
         }
     }
-    // The rock below: from the rim down to a jagged point.
-    for (int k = 1; k <= under; ++k) {
-        const float s01 = float(k) / float(under);
+    // The rock below, a mesh of its own (the rock's look): a rounded lip of grass and earth, then soft stone that
+    // narrows in steps (ledges on part of the way round) to a few hanging points. The profile's knots are fractions of
+    // the rim's radius and of the depth; each angle moves them a little.
+    struct Knot {
+        float r, d;
+    };
+    static constexpr std::array<Knot, 12> kProfile = {{{1.0f, 0.0f},
+                                                       {1.02f, 0.012f},
+                                                       {0.98f, 0.045f},
+                                                       {0.91f, 0.12f},
+                                                       {0.87f, 0.22f},
+                                                       {0.77f, 0.25f},
+                                                       {0.72f, 0.36f},
+                                                       {0.61f, 0.48f},
+                                                       {0.52f, 0.51f},
+                                                       {0.41f, 0.64f},
+                                                       {0.2f, 0.84f},
+                                                       {0.0f, 1.0f}}};
+    constexpr int kSteps = 3; // rings between two knots
+    MeshData rock;
+    const int rockRows = int(kProfile.size() - 1) * kSteps + 1;
+    for (int k = 0; k < rockRows; ++k) {
+        const int knot = k / kSteps;
+        const float f = float(k % kSteps) / float(kSteps);
         for (int s = 0; s <= segments; ++s) {
             const float a = kTau * float(s % segments) / float(segments);
             const glm::vec2 dir(std::cos(a), std::sin(a));
             const float edge = isle.outline(a);
-            // Lumpy rock narrowing to a few hanging points, with ridges down its sides.
-            const float n1 = fbm(dir * 2.2f + glm::vec2(s01 * 2.0f, float(d.seed % 13)), 3, d.seed + 17);
-            const float n2 = fbm(dir * 1.7f + glm::vec2(float(d.seed % 7)), 3, d.seed + 19) * 0.5f + 0.5f;
-            const float ridge = std::abs(fbm(glm::vec2(a * 4.0f, s01 * 0.7f), 2, d.seed + 21));
-            const float bulge = k == 1 ? 1.03f : 1.0f;
-            const float radius = edge * std::pow(1.0f - s01, 0.65f) *
-                                 (1.0f + (0.1f + 0.25f * s01) * n1 - 0.08f * ridge * (0.3f + s01)) * bulge;
-            const float y = rimY[std::size_t(s)] - 0.5f - d.depth * std::pow(s01, 1.1f) * (0.45f + 0.9f * n2 * n2) -
-                            (k == 1 ? 0.6f : 0.0f);
+            const float ledges =
+                smoothstep(-0.25f, 0.35f, fbm(dir * 1.3f + glm::vec2(float(d.seed % 11)), 2, d.seed + 5));
+            const float hang = fbm(dir * 1.7f + glm::vec2(float(d.seed % 7)), 3, d.seed + 19) * 0.5f + 0.5f;
+            auto at = [&](int i) {
+                i = std::clamp(i, 0, int(kProfile.size()) - 1);
+                Knot q = kProfile[std::size_t(i)];
+                // Without a ledge here the step's inner knot sits on the line between its neighbours.
+                if (i == 5) q.r = glm::mix(0.85f, q.r, ledges);
+                if (i == 8) q.r = glm::mix(0.58f, q.r, ledges);
+                // Lower down, some angles hang far deeper than others.
+                q.d *= glm::mix(1.0f, 0.5f + 0.95f * hang * hang, smoothstep(0.3f, 0.9f, q.d));
+                return glm::vec2(q.r, q.d);
+            };
+            // Catmull-Rom through the knots.
+            const glm::vec2 p0 = at(knot - 1), p1 = at(knot), p2 = at(knot + 1), p3 = at(knot + 2);
+            const float f2 = f * f, f3 = f2 * f;
+            const glm::vec2 q = 0.5f * (2.0f * p1 + (p2 - p0) * f + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * f2 +
+                                        (3.0f * p1 - p0 - 3.0f * p2 + p3) * f3);
+            const float s01 = float(k) / float(rockRows - 1);
+            // Lumps that change with the depth; rounded buttresses down the sides, closer together lower down.
+            const float lump = fbm(dir * 2.6f + glm::vec2(q.y * 3.2f, float(d.seed % 13)), 3, d.seed + 17);
+            const float knob = fbm(dir * 7.0f + glm::vec2(q.y * 9.0f, 5.0f), 2, d.seed + 27);
+            const float flute = std::abs(fbm(glm::vec2(a * (6.0f + 4.0f * s01), q.y * 1.2f), 2, d.seed + 21));
+            const float buttress = 1.0f - flute;
+            const float radius =
+                edge * std::max(q.x, 0.0f) *
+                (1.0f + (0.04f + 0.14f * s01) * lump + 0.03f * knob * s01 + 0.07f * (buttress - 0.6f) * s01);
+            const float y = rimY[std::size_t(s)] - d.depth * q.y - (k == 0 ? 0.0f : 0.3f);
             const glm::vec2 xz = d.centre + dir * radius;
-            const float band = fbm(glm::vec2(y * 0.35f, a * 3.0f), 2, d.seed + 23) * 0.5f + 0.5f;
-            glm::vec3 color = lerpColor(srgb(160, 142, 128), srgb(122, 110, 104), band);
-            color = lerpColor(color, srgb(140, 132, 140), smoothstep(0.4f, 1.0f, s01) * 0.6f);
-            color *= 1.0f - 0.25f * ridge;
-            color = lerpColor(srgb(104, 84, 62), color, smoothstep(0.0f, 0.1f, s01));
-            mesh.vertices.push_back({.position = glm::vec3(xz.x, y, xz.y) + kAlt,
-                                     .uv = glm::vec2(a * d.radius * 0.25f, y * 0.25f),
+            // Grass over the lip, a band of earth, then stone: warm above, cooler and lilac below, in broad patches,
+            // the hollows between the buttresses darker.
+            const float metres = d.depth * q.y;
+            const float patch = fbm(dir * 2.0f + glm::vec2(q.y * 2.5f, 3.0f), 2, d.seed + 23) * 0.5f + 0.5f;
+            glm::vec3 color = lerpColor(srgb(160, 138, 118), srgb(138, 128, 114), patch);
+            color = lerpColor(color, srgb(122, 116, 136), smoothstep(0.35f, 0.95f, q.y) * 0.75f);
+            color *= glm::mix(0.78f, 1.06f, buttress);
+            color = lerpColor(srgb(104, 80, 58), color, smoothstep(0.9f, 2.2f, metres));
+            color = lerpColor(isle.grassColor(xz) * 0.62f, color, smoothstep(0.25f, 0.8f, metres));
+            rock.vertices.push_back({.position = glm::vec3(xz.x, y, xz.y) + kAlt,
+                                     .uv = glm::vec2(0.0f, q.y),
                                      .color = glm::vec4(color, 1.0f)});
         }
     }
-    const int rows = rings + 1 + under;
-    for (int r = 0; r + 1 < rows; ++r)
-        for (int s = 0; s < segments; ++s) {
-            const auto a = std::uint32_t(r * (segments + 1) + s);
-            const auto b = a + std::uint32_t(segments + 1);
-            // Counter-clockwise seen from above on the top, from outside below.
-            mesh.indices.insert(mesh.indices.end(), {a, a + 1, b, a + 1, b + 1, b});
+    // Both grids: rings of segments + 1 vertices (the last column repeats the first).
+    auto finish = [&](MeshData& m, int rows, bool closedCentre, const std::string& name, render::MaterialId material) {
+        for (int r = 0; r + 1 < rows; ++r)
+            for (int s = 0; s < segments; ++s) {
+                const auto a = std::uint32_t(r * (segments + 1) + s);
+                const auto b = a + std::uint32_t(segments + 1);
+                // Counter-clockwise seen from above on the top, from outside below.
+                m.indices.insert(m.indices.end(), {a, a + 1, b, a + 1, b + 1, b});
+            }
+        computeNormals(m);
+        // Seams at angle 0: the duplicated column shares its neighbour's normal.
+        for (int r = 0; r < rows; ++r) {
+            const auto first = std::size_t(r * (segments + 1));
+            const glm::vec3 n =
+                glm::normalize(m.vertices[first].normal + m.vertices[first + std::size_t(segments)].normal);
+            m.vertices[first].normal = n;
+            m.vertices[first + std::size_t(segments)].normal = n;
         }
-    computeNormals(mesh);
-    // Seams at angle 0: the duplicated column shares its neighbour's normal.
-    for (int r = 0; r < rows; ++r) {
-        const auto first = std::size_t(r * (segments + 1));
-        const glm::vec3 n =
-            glm::normalize(mesh.vertices[first].normal + mesh.vertices[first + std::size_t(segments)].normal);
-        mesh.vertices[first].normal = n;
-        mesh.vertices[first + std::size_t(segments)].normal = n;
+        // The top's centre is one point repeated: its normals averaged.
+        if (closedCentre) {
+            glm::vec3 n(0.0f);
+            for (int s = 0; s <= segments; ++s) n += m.vertices[std::size_t(s)].normal;
+            for (int s = 0; s <= segments; ++s) m.vertices[std::size_t(s)].normal = glm::normalize(n);
+        }
+        computeTangents(m);
+        Result<render::MeshId> id = scene.addMesh(m.desc(name));
+        if (!id) {
+            quench::log::error("game", "{}: {}", name, id.error());
+            return;
+        }
+        scene.addInstance({.mesh = *id, .material = material});
+        addStatic(physics, m);
+    };
+    finish(mesh, rings + 1, true, std::format("isle {}", d.seed), m_terrain);
+    finish(rock, rockRows, false, std::format("isle {} rock", d.seed), m_rock);
+    buildHanging(scene, isle, rimY);
+}
+
+void World::buildHanging(render::Scene& scene, const Isle& isle, const std::vector<float>& rimY) {
+    // Tufts of grass over the rim and roots hanging from it, swaying a little (the foliage's look; their root
+    // height above each vertex keeps the wind's sway off, so they hang still).
+    const IsleDesc& d = isle.desc;
+    const int segments = int(rimY.size()) - 1;
+    Random random{d.seed * 747796405u + 3u};
+    MeshData m;
+    const float circumference = kTau * d.radius;
+    const int tufts = int(circumference / 0.45f);
+    auto strip = [&](glm::vec3 top, glm::vec3 bottom, glm::vec3 side, glm::vec3 topColor, glm::vec3 bottomColor) {
+        const auto first = std::uint32_t(m.vertices.size());
+        const glm::vec3 n = glm::normalize(glm::cross(side, bottom - top));
+        for (const glm::vec3& p : {top - side, top + side})
+            m.vertices.push_back(
+                {.position = p, .normal = n, .uv = {0.0f, top.y + 1.0f}, .color = glm::vec4(topColor, 1.0f)});
+        m.vertices.push_back(
+            {.position = bottom, .normal = n, .uv = {1.0f, top.y + 1.0f}, .color = glm::vec4(bottomColor, 1.0f)});
+        m.indices.insert(m.indices.end(), {first, first + 1, first + 2});
+    };
+    for (int t = 0; t < tufts; ++t) {
+        const float a = kTau * (float(t) + random.uniform()) / float(tufts);
+        const glm::vec2 dir(std::cos(a), std::sin(a));
+        const float edge = isle.outline(a);
+        const float fs = a / kTau * float(segments);
+        const int s0 = std::clamp(int(fs), 0, segments - 1);
+        const float y = glm::mix(rimY[std::size_t(s0)], rimY[std::size_t(s0 + 1)], fs - float(s0));
+        const glm::vec2 xz = d.centre + dir * edge * 1.012f;
+        const glm::vec3 rim = glm::vec3(xz.x, y - 0.05f, xz.y) + kAlt;
+        const glm::vec3 out(dir.x, 0.0f, dir.y);
+        const glm::vec3 across(-dir.y, 0.0f, dir.x);
+        const glm::vec3 green = isle.grassColor(xz);
+        // Tufts in clumps, some long, gaps between: blades that curl over the lip and hang.
+        const float clump = fbm(dir * 11.0f + glm::vec2(float(d.seed % 5)), 2, d.seed + 33) * 0.5f + 0.5f;
+        const int blades = int(float(2 + random.range(5)) * smoothstep(0.3f, 0.7f, clump) + 0.5f);
+        for (int b = 0; b < blades; ++b) {
+            const glm::vec3 root = rim + across * random.uniform(-0.25f, 0.25f);
+            const float length = random.uniform(0.15f, 0.5f) * (0.6f + clump);
+            const glm::vec3 tip = root + out * random.uniform(0.06f, 0.2f) + glm::vec3(0.0f, -length, 0.0f) +
+                                  across * random.uniform(-0.15f, 0.15f);
+            strip(root, tip, across * random.uniform(0.02f, 0.04f), green * 0.55f, green * 0.85f);
+        }
+        // Now and then a root or a vine, longer, that hangs below the lip.
+        if (random.uniform() < 0.12f) {
+            const bool vine = random.uniform() < 0.6f;
+            const float length = random.uniform(1.2f, vine ? 5.0f : 3.0f);
+            const int pieces = int(length / 0.4f) + 1;
+            const glm::vec3 color = vine ? green * 0.75f : srgb(104, 82, 62);
+            glm::vec3 from = rim + out * 0.05f;
+            for (int k = 0; k < pieces; ++k) {
+                const float sway = std::sin(float(k) * 1.3f + a * 17.0f) * 0.06f;
+                const glm::vec3 to = from + glm::vec3(0.0f, -length / float(pieces), 0.0f) + across * sway +
+                                     out * (k < 2 ? 0.08f : 0.0f);
+                const float width = (vine ? 0.03f : 0.025f) * (1.0f - 0.6f * float(k) / float(pieces));
+                const auto first = std::uint32_t(m.vertices.size());
+                for (const glm::vec3& p :
+                     {from - across * width, from + across * width, to - across * width, to + across * width})
+                    m.vertices.push_back({.position = p,
+                                          .normal = out,
+                                          .uv = {0.0f, rim.y + 1.0f},
+                                          .color = glm::vec4(color * (p.y < from.y - 0.01f ? 1.05f : 1.0f), 1.0f)});
+                m.indices.insert(m.indices.end(), {first, first + 2, first + 1, first + 1, first + 2, first + 3});
+                // Leaves along a vine.
+                if (vine && k % 2 == 1) {
+                    const glm::vec3 leaf = to + across * random.uniform(-1.0f, 1.0f) * 0.12f;
+                    strip(to, leaf + glm::vec3(0.0f, -0.12f, 0.0f) + out * 0.04f, across * 0.05f, green * 0.7f,
+                          green * glm::vec3(1.1f, 1.2f, 0.9f));
+                }
+                from = to;
+            }
+        }
     }
-    // The top's centre is one point repeated: its normals averaged.
-    {
-        glm::vec3 n(0.0f);
-        for (int s = 0; s <= segments; ++s) n += mesh.vertices[std::size_t(s)].normal;
-        for (int s = 0; s <= segments; ++s) mesh.vertices[std::size_t(s)].normal = glm::normalize(n);
-    }
-    computeTangents(mesh);
-    const std::string name = std::format("isle {}", d.seed);
-    Result<render::MeshId> id = scene.addMesh(mesh.desc(name));
-    if (!id) {
-        quench::log::error("game", "{}: {}", name, id.error());
-        return;
-    }
-    scene.addInstance({.mesh = *id, .material = m_terrain});
-    addStatic(physics, mesh);
+    if (m.indices.empty()) return;
+    if (Result<render::MeshId> id = scene.addMesh(m.desc(std::format("isle {} lip", d.seed))))
+        scene.addInstance({.mesh = *id, .material = m_grass, .castsShadows = false});
 }
 
 void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) {
@@ -760,8 +882,8 @@ void World::buildCave(render::Scene& scene, quench::PhysicsWorld& physics) {
     const float height = l.caveHeight;
     const glm::vec2 toMouth = glm::normalize(glm::vec2(l.caveEntrance.x - c.x, l.caveEntrance.z - c.z));
     const float mouthAngle = std::atan2(toMouth.y, toMouth.x);
-    constexpr int segments = 80;
-    constexpr int rings = 20;
+    constexpr int segments = 112;
+    constexpr int rings = 28;
     // A dome of rock: rings from the ground up to the crown, lumpy, its foot sunk into the floor.
     MeshData shell;
     std::vector<glm::vec2> params;
@@ -771,11 +893,13 @@ void World::buildCave(render::Scene& scene, quench::PhysicsWorld& physics) {
             const float a = kTau * float(k % segments) / float(segments);
             const glm::vec2 dir(std::cos(a), std::sin(a));
             const float lump = fbm(dir * 1.9f + glm::vec2(phi * 1.7f, 3.0f), 3, 211u);
-            const float rr = radius * std::pow(std::max(std::cos(phi), 0.0f), 0.7f) * (1.0f + 0.14f * lump);
+            const float knob = fbm(dir * 6.0f + glm::vec2(phi * 5.0f, 9.0f), 2, 213u);
+            const float rr =
+                radius * std::pow(std::max(std::cos(phi), 0.0f), 0.7f) * (1.0f + 0.14f * lump + 0.06f * knob);
             const float y =
                 c.y - 1.4f + height * std::sin(phi) * (1.0f + 0.1f * std::cos(phi) * fbm(dir * 2.3f + 7.0f, 2, 223u));
-            const float band = fbm(glm::vec2(y * 0.6f, a * 5.0f), 2, 227u) * 0.5f + 0.5f;
-            const glm::vec3 color = lerpColor(srgb(150, 140, 126), srgb(118, 112, 104), band);
+            const float patch = fbm(dir * 2.5f + glm::vec2(phi * 2.0f, 1.0f), 2, 227u) * 0.5f + 0.5f;
+            const glm::vec3 color = lerpColor(srgb(170, 156, 138), srgb(136, 132, 122), patch);
             shell.vertices.push_back({.position = glm::vec3(c.x + dir.x * rr, y, c.z + dir.y * rr) + kAlt,
                                       .uv = glm::vec2(a * radius * 0.3f, y * 0.3f),
                                       .color = glm::vec4(color, 1.0f)});
@@ -864,6 +988,9 @@ Result<void> World::build(render::Scene& scene, quench::PhysicsWorld& physics, r
     render::MaterialDesc terrain{.surface = world, .baseColor = {1.0f, 1.0f, 1.0f, 1.0f}, .roughness = 0.92f};
     terrain.params[0] = glm::vec4(0.0f);
     m_terrain = scene.addMaterial(terrain);
+    render::MaterialDesc rock{.surface = world, .baseColor = {1.0f, 1.0f, 1.0f, 1.0f}, .roughness = 0.9f};
+    rock.params[0] = glm::vec4(4.0f, 0.0f, 0.0f, 0.0f);
+    m_rock = scene.addMaterial(rock);
     render::MaterialDesc stone{.surface = world, .baseColor = {1.0f, 1.0f, 1.0f, 1.0f}, .roughness = 0.85f};
     stone.params[0] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
     m_stoneMaterial = scene.addMaterial(stone);
