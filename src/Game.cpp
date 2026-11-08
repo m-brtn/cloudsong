@@ -478,7 +478,7 @@ public:
             break;
         case MenuAction::None: break;
         }
-        if (m_ending >= 6.0f) endingCard();
+        if (m_ending >= 6.0f && m_screen == Screen::Playing) endingCard();
         if (!m_debugUi) return;
         ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Cloudsong", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -861,7 +861,6 @@ private:
 
     // The quality's render settings and the volumes.
     void applySettings(App& app) {
-        (void)app;
         render::RenderSettings rs = m_renderer->settings();
         rs.cloudShadows = false;
         rs.bloom = true;
@@ -902,6 +901,9 @@ private:
             rs.reflections = render::Reflections::Sky;
             break;
         }
+        // Phone screens are dense enough that fewer pixels look the same, and an iPhone 17 renders about three times
+        // slower than an M4 Pro (the engine's measurements).
+        if (app.mobile()) rs.renderScale *= 0.82f;
         m_playerRender = rs;
         m_renderer->setSettings(rs);
         m_sound.setVolumes(m_settings.music, m_settings.effects);

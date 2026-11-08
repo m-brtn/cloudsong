@@ -5,7 +5,7 @@
 #                               CREDITS.md and the engine's LICENSE and THIRD_PARTY_LICENSES; then unzips it, runs
 #                               the smoke scenario from the unzipped app (offscreen) and saves a capture next to it
 #   tools/package.sh --ios      also builds the iOS app (ios-xcode, Automatic signing by a paid team: --team ID or
-#                               QUENCH_IOS_TEAM) into dist/Cloudsong-<version>-<hash>-ios/Cloudsong.app; installs nothing
+#                               QUENCH_IOS_TEAM) into dist/Cloudsong-<version>-<hash>-ios/cloudsong.app; installs nothing
 #   --no-checks                 skips ctest
 set -euo pipefail
 
@@ -132,17 +132,17 @@ if [[ $IOS -eq 1 ]]; then
     [[ -n "$TEAM" ]] || fail "no team: --team ID or QUENCH_IOS_TEAM"
     cmake --preset host-tools >/dev/null
     cmake --build --preset host-tools
-    cmake --preset ios-xcode -DQUENCH_IOS_TEAM="$TEAM" >/dev/null
+    cmake --preset ios-xcode -DQUENCH_IOS_TEAM="$TEAM" -DQUENCH_IOS_BUNDLE_ID_SUFFIX= >/dev/null
     XBUILD="$ROOT/build/ios-xcode"
-    xcodebuild -project "$XBUILD/Cloudsong.xcodeproj" -scheme cloudsong -configuration Release \
+    xcodebuild -project "$XBUILD/cloudsong.xcodeproj" -scheme cloudsong -configuration Release \
         -destination generic/platform=iOS -allowProvisioningUpdates -quiet build
-    IOS_APP="$(find "$XBUILD" -name Cloudsong.app -path '*Release-iphoneos*' -maxdepth 3 | head -n 1)"
-    [[ -d "$IOS_APP" ]] || fail "no Cloudsong.app under $XBUILD"
+    IOS_APP="$(find "$XBUILD" -name cloudsong.app -path '*Release-iphoneos*' -maxdepth 3 | head -n 1)"
+    [[ -d "$IOS_APP" ]] || fail "no cloudsong.app under $XBUILD"
     codesign --verify --deep --strict "$IOS_APP"
     codesign -dvv "$IOS_APP" 2>&1 | grep -qx "TeamIdentifier=$TEAM" || fail "the iOS app is not signed by the team"
     [[ -f "$IOS_APP/embedded.mobileprovision" ]] || fail "the iOS app has no provisioning profile"
     rm -rf "$DIST/$NAME-ios"
     mkdir -p "$DIST/$NAME-ios"
     cp -R "$IOS_APP" "$DIST/$NAME-ios/"
-    echo "iOS app: $DIST/$NAME-ios/Cloudsong.app"
+    echo "iOS app: $DIST/$NAME-ios/cloudsong.app"
 fi

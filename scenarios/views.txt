@@ -51,6 +51,13 @@ wait 0.5
 capture views/pond.png
 view off
 
+# The title.
+teleport 2 0.8 -36 0
+screen title
+wait 2.0
+capture views/title.png
+screen play
+
 # The end: every candle lit, the spirits gather at the altar.
 light 1
 light 2
@@ -60,13 +67,8 @@ aim 10 218
 move 0 1
 until ending >= 0 15
 move 0 0
+until ending > 5 30
+capture views/end_close.png
 until ending > 13 30
 capture views/end.png
-
-# The title.
-view off
-teleport 2 0.8 -36 0
-screen title
-wait 2.0
-capture views/title.png
 quit

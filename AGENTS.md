@@ -31,7 +31,9 @@ quality, the touch controls under scripted fingers), `captures` and `golden_<vie
 compared with `tests/golden/metal/`, captured on the default backend, native Metal, on the M4 Pro Mac). A golden image
 changes only with an intended change of the look: look at both, copy `build/release/captures/golden/<view>.png`
 over it, and write the reason in the devlog. Spirits are not in the golden views: their navmesh is built on worker
-threads, so the frame it is ready on varies. `scenarios/views.txt` captures the showcase views at any size.
+threads, so the frame it is ready on varies. `scenarios/views.txt` captures the showcase views at any size;
+`scenarios/perf.txt` measures frame and GPU times at five places per picture setting (offscreen: an A/B of costs
+before and after a change in the same session, not frame rates on a display).
 
 Game scenario commands (besides the engine's): `teleport X Y Z [YAW]`, `camera YAW PITCH DIST`, `orbit DYAW PITCH
 DIST`, `aim X Z`, `view EX EY EZ TX TY TZ` / `view off`, `move X Y`, `jump down|up`, `call`, `light I`, `clouds

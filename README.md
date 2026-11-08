@@ -7,6 +7,11 @@ A short journey of about ten to fifteen minutes.
 
 ![The title over the meadow](docs/images/title.jpg)
 
+| | |
+|---|---|
+| ![Gliding over the sea of clouds](docs/images/glide.jpg) | ![The isles and the temple of light](docs/images/isles.jpg) |
+| ![A spirit woken by the pond](docs/images/spirit.jpg) | |
+
 Everything in it but one font is made by code: the isles, the grass and flowers, the ruins, the figures, their capes,
 the light, the music and the sounds (see `CREDITS.md`).
 
@@ -31,7 +36,7 @@ broken columns and carries the player up to the temple of light. Stand at its al
 
 Settings (on the title and when resting): picture quality (Light, Balanced, Beautiful), music and sound volume,
 camera speed and inverted camera. They are kept in the user directory (`settings.json`). Phones start at Balanced and
-60 Hz, and lower their render scale when they grow hot.
+60 Hz with a lower render scale, and lower it further when they grow hot.
 
 ## Build
 
@@ -64,7 +69,9 @@ src/Spirits.*       the spirits: asleep, waking, following on the navmesh or thr
 src/Sound.*         the score and the sounds, synthesized; the wind through the engine's weather sounds
 src/Glow.*          an additive pass for beams, rings of light, motes and halos
 shaders/            surfaces (ground, stone, figures; grass and flowers in the wind) and the glow
-scenarios/          scripted checks (--script), run by ctest; views.txt captures the key views
+scenarios/          scripted checks (--script), run by ctest; views.txt captures the key views, perf.txt measures
+                    frame and GPU times per picture setting
+docs/images/        the screenshots above
 tests/golden/       reference captures for the golden image checks
 tools/package.sh    the macOS and iOS packages
 devlog/             development log
