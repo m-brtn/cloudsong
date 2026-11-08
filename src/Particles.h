@@ -24,8 +24,8 @@ class Particles {
 public:
     // What moves the effects this frame (world coordinates).
     struct Frame {
-        double time = 0.0;  // the game's clock (s)
-        float dt = 0.0f;    // since the last frame (s)
+        double time = 0.0; // the game's clock (s)
+        float dt = 0.0f;   // since the last frame (s)
         glm::vec3 eye{0.0f};
         glm::vec3 capeLeft{0.0f}, capeRight{0.0f}, capeCentre{0.0f}; // the cape's lower corners and its middle
         glm::vec3 velocity{0.0f};
@@ -58,6 +58,12 @@ private:
         std::vector<quench::render::TrailId> halos; // a wide faint ribbon round each head's, or none
         quench::render::ParticleSystemId sparkles;
     };
+    // A ribbon from the cape, trails that follow one point: a warm band, alpha-blended so that its colour holds
+    // against a bright sky; the light along its middle with the glowing head at the cape (additive, it sheds the
+    // sparkles); on the finer settings a wide faint glow round them.
+    struct Wing {
+        std::vector<quench::render::TrailId> trails;
+    };
 
     void buildStreams(quench::render::Scene& scene);
     void removeStreams(quench::render::Scene& scene);
@@ -71,7 +77,7 @@ private:
     std::array<std::vector<glm::vec3>, 3> m_courses; // the streams' courses (world), clear of the ground
 
     std::vector<Stream> m_streams;
-    std::vector<quench::render::TrailId> m_wings;
+    std::vector<Wing> m_wings;
     quench::render::ParticleSystemId m_wingSparkles;
     bool m_emitting = false;
     float m_sinceFlight = 0.0f; // s since the figure last flew

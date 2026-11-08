@@ -24,19 +24,19 @@ namespace {
 
 // What a picture setting allows.
 struct Budget {
-    int streams;                  // courses with a stream: the meadow's and the temple's first, then the updraft's
-    int heads;                    // per stream
-    float trailSeconds;           // how long a stream's ribbon lasts
-    std::uint32_t subdivisions;   // strip vertices per recorded segment
-    float streamSparkles;         // shed per metre by each head
-    std::uint32_t streamSlots;    // per stream
-    int wings;                    // 1: a ribbon from the cape's middle; 2: one from each lower corner
-    float wingSparkles;           // shed per metre by each ribbon
+    int streams;                // courses with a stream: the meadow's and the temple's first, then the updraft's
+    int heads;                  // per stream
+    float trailSeconds;         // how long a stream's ribbon lasts
+    std::uint32_t subdivisions; // strip vertices per recorded segment
+    float streamSparkles;       // shed per metre by each head
+    std::uint32_t streamSlots;  // per stream
+    int wings;                  // 1: a ribbon from the cape's middle; 2: one from each lower corner
+    float wingSparkles;         // shed per metre by each ribbon
     std::uint32_t wingSlots;
     std::uint32_t fieldSlots;
-    float fieldRate;              // points per second at dusk
-    float motes;                  // the beam's, the updraft's and the cave's rates and slots, times
-    bool halos;                   // a wide faint ribbon round each stream's
+    float fieldRate; // points per second at dusk
+    float motes;     // the beam's, the updraft's and the cave's rates and slots, times
+    bool halos;      // a wide faint ribbon round each stream's and the cape's
 };
 
 Budget budgetOf(Quality q) {
@@ -82,8 +82,8 @@ std::vector<glm::vec3> course(const World& world, glm::vec3 centre, glm::vec2 ra
     for (int pass = 0; pass < 6; ++pass) {
         std::vector<glm::vec3> smooth = points;
         for (int i = 0; i < kPoints; ++i) {
-            const float y = 0.25f * points[std::size_t((i + kPoints - 1) % kPoints)].y + 0.5f * points[std::size_t(i)].y +
-                            0.25f * points[std::size_t((i + 1) % kPoints)].y;
+            const float y = 0.25f * points[std::size_t((i + kPoints - 1) % kPoints)].y +
+                            0.5f * points[std::size_t(i)].y + 0.25f * points[std::size_t((i + 1) % kPoints)].y;
             smooth[std::size_t(i)].y = std::max(y, floor[std::size_t(i)]);
         }
         points = std::move(smooth);
@@ -91,21 +91,24 @@ std::vector<glm::vec3> course(const World& world, glm::vec3 centre, glm::vec2 ra
     return points;
 }
 
-// A ribbon of light: a thin bright core, or the wide faint halo round it.
+// A ribbon of light: a bright core (additive), or the wide soft band of its colour round it (alpha-blended, so
+// that the hue holds against a bright sky where added light would turn white).
 TrailDesc ribbon(const Budget& b, glm::vec3 color, bool halo) {
     return {.lifetime = b.trailSeconds,
             .spacing = 0.3f,
             .maxPoints = 128,
             .subdivisions = b.subdivisions,
-            .width = halo ? 1.1f : 0.13f,
+            .width = halo ? 1.0f : 0.16f,
             .widthOverAge = {{0.0f, 0.7f}, {0.06f, 1.0f}, {0.5f, 0.65f}, {1.0f, 0.0f}},
-            .color = color * (halo ? 0.1f : 1.0f),
+            .color = color * (halo ? 0.8f : 1.0f),
+            .opacity = halo ? 0.35f : 1.0f,
             .colorOverAge = {{0.0f, glm::vec4(1.8f, 1.8f, 1.8f, 1.0f)},
                              {0.12f, glm::vec4(1.2f, 1.2f, 1.2f, 1.0f)},
                              {0.5f, glm::vec4(0.9f, 0.9f, 0.95f, 0.6f)},
                              {1.0f, glm::vec4(0.7f, 0.7f, 0.8f, 0.0f)}},
             .headSize = halo ? 0.0f : 0.4f,
             .headColor = color * 1.2f + glm::vec3(1.2f),
+            .blend = halo ? Blend::Alpha : Blend::Additive,
             .softness = halo ? 1.0f : 0.35f,
             .minPixels = halo ? 1.0f : 1.5f};
 }
@@ -179,75 +182,72 @@ quench::Result<void> Particles::create(render::Scene& scene, const World& world,
     m_field = *field;
 
     // Motes rising slowly in the temple's beam, quickly in the open updraft, and drifting in the cave's light.
-    quench::Result<render::ParticleSystemId> beam = scene.addParticles(
-        {.maxParticles = slots(512.0f, b.motes),
-         .seed = 13,
-         .rate = 24.0f * b.motes,
-         .shape = Shape::Disc,
-         .extent = glm::vec3(1.8f),
-         .lifetime = {14.0f, 22.0f},
-         .speed = {1.2f, 2.6f},
-         .spread = 0.15f,
-         .size = {0.05f, 0.09f},
-         .noise = 0.25f,
-         .noiseScale = 6.0f,
-         .noiseRate = 0.1f,
-         .color = glm::vec3(5.0f, 4.3f, 3.0f) * 0.8f,
-         .colorOverLife = fadeInOut(0.1f, 0.8f),
-         .brightnessVariation = 0.5f,
-         .twinkle = 0.45f,
-         .twinkleRate = 0.4f,
-         .twinkleSharpness = 1.0f,
-         .softness = 0.2f,
-         .minPixels = 1.2f},
-        at(m_beamBase));
+    quench::Result<render::ParticleSystemId> beam = scene.addParticles({.maxParticles = slots(512.0f, b.motes),
+                                                                        .seed = 13,
+                                                                        .rate = 24.0f * b.motes,
+                                                                        .shape = Shape::Disc,
+                                                                        .extent = glm::vec3(1.8f),
+                                                                        .lifetime = {14.0f, 22.0f},
+                                                                        .speed = {1.2f, 2.6f},
+                                                                        .spread = 0.15f,
+                                                                        .size = {0.05f, 0.09f},
+                                                                        .noise = 0.25f,
+                                                                        .noiseScale = 6.0f,
+                                                                        .noiseRate = 0.1f,
+                                                                        .color = glm::vec3(5.0f, 4.3f, 3.0f) * 0.8f,
+                                                                        .colorOverLife = fadeInOut(0.1f, 0.8f),
+                                                                        .brightnessVariation = 0.5f,
+                                                                        .twinkle = 0.45f,
+                                                                        .twinkleRate = 0.4f,
+                                                                        .twinkleSharpness = 1.0f,
+                                                                        .softness = 0.2f,
+                                                                        .minPixels = 1.2f},
+                                                                       at(m_beamBase));
     if (!beam) return quench::Error{beam.error()};
     m_beam = *beam;
     const float rise = std::max(m_updraftTop - m_updraft.y, 10.0f);
-    quench::Result<render::ParticleSystemId> rising = scene.addParticles(
-        {.maxParticles = slots(512.0f, b.motes),
-         .seed = 17,
-         .rate = 30.0f * b.motes,
-         .shape = Shape::Disc,
-         .extent = glm::vec3(m_updraftRadius),
-         .lifetime = {rise / 9.0f, rise / 7.0f},
-         .speed = {6.0f, 10.0f},
-         .spread = 0.08f,
-         .size = {0.04f, 0.07f},
-         .noise = 0.7f,
-         .noiseScale = 3.0f,
-         .noiseRate = 0.3f,
-         .color = glm::vec3(2.4f, 2.4f, 2.0f),
-         .colorOverLife = fadeInOut(0.08f, 0.75f),
-         .brightnessVariation = 0.5f,
-         .twinkle = 0.5f,
-         .twinkleRate = 2.0f,
-         .softness = 0.2f,
-         .minPixels = 1.2f},
-        at(m_updraft));
+    quench::Result<render::ParticleSystemId> rising = scene.addParticles({.maxParticles = slots(512.0f, b.motes),
+                                                                          .seed = 17,
+                                                                          .rate = 30.0f * b.motes,
+                                                                          .shape = Shape::Disc,
+                                                                          .extent = glm::vec3(m_updraftRadius),
+                                                                          .lifetime = {rise / 9.0f, rise / 7.0f},
+                                                                          .speed = {6.0f, 10.0f},
+                                                                          .spread = 0.08f,
+                                                                          .size = {0.04f, 0.07f},
+                                                                          .noise = 0.7f,
+                                                                          .noiseScale = 3.0f,
+                                                                          .noiseRate = 0.3f,
+                                                                          .color = glm::vec3(2.4f, 2.4f, 2.0f),
+                                                                          .colorOverLife = fadeInOut(0.08f, 0.75f),
+                                                                          .brightnessVariation = 0.5f,
+                                                                          .twinkle = 0.5f,
+                                                                          .twinkleRate = 2.0f,
+                                                                          .softness = 0.2f,
+                                                                          .minPixels = 1.2f},
+                                                                         at(m_updraft));
     if (!rising) return quench::Error{rising.error()};
     m_rising = *rising;
     scene.setParticlesEmitting(m_rising, false);
-    quench::Result<render::ParticleSystemId> cave = scene.addParticles(
-        {.maxParticles = slots(160.0f, b.motes),
-         .seed = 19,
-         .rate = 14.0f * b.motes,
-         .shape = Shape::Box,
-         .extent = glm::vec3(8.0f, 2.5f, 8.0f),
-         .lifetime = {6.0f, 10.0f},
-         .speed = {0.0f, 0.08f},
-         .spread = kPi,
-         .size = {0.025f, 0.045f},
-         .noise = 0.12f,
-         .noiseScale = 2.0f,
-         .color = glm::vec3(4.0f, 3.6f, 1.6f) * 0.6f,
-         .colorOverLife = fadeInOut(0.15f, 0.8f),
-         .brightnessVariation = 0.5f,
-         .twinkle = 0.6f,
-         .twinkleRate = 1.2f,
-         .softness = 0.1f,
-         .minPixels = 1.2f},
-        at(m_cave + glm::vec3(0.0f, 2.5f, 0.0f)));
+    quench::Result<render::ParticleSystemId> cave = scene.addParticles({.maxParticles = slots(160.0f, b.motes),
+                                                                        .seed = 19,
+                                                                        .rate = 14.0f * b.motes,
+                                                                        .shape = Shape::Box,
+                                                                        .extent = glm::vec3(8.0f, 2.5f, 8.0f),
+                                                                        .lifetime = {6.0f, 10.0f},
+                                                                        .speed = {0.0f, 0.08f},
+                                                                        .spread = kPi,
+                                                                        .size = {0.025f, 0.045f},
+                                                                        .noise = 0.12f,
+                                                                        .noiseScale = 2.0f,
+                                                                        .color = glm::vec3(4.0f, 3.6f, 1.6f) * 0.6f,
+                                                                        .colorOverLife = fadeInOut(0.15f, 0.8f),
+                                                                        .brightnessVariation = 0.5f,
+                                                                        .twinkle = 0.6f,
+                                                                        .twinkleRate = 1.2f,
+                                                                        .softness = 0.1f,
+                                                                        .minPixels = 1.2f},
+                                                                       at(m_cave + glm::vec3(0.0f, 2.5f, 0.0f)));
     if (!cave) return quench::Error{cave.error()};
     m_caveMotes = *cave;
 
@@ -261,7 +261,8 @@ void Particles::setQuality(render::Scene& scene, Quality quality) {
     m_quality = quality;
     const Budget b = budgetOf(quality);
     removeStreams(scene);
-    for (const render::TrailId wing : m_wings) scene.removeTrail(wing);
+    for (const Wing& wing : m_wings)
+        for (const render::TrailId t : wing.trails) scene.removeTrail(t);
     m_wings.clear();
     scene.removeParticles(m_wingSparkles);
     buildStreams(scene);
@@ -295,9 +296,8 @@ void Particles::buildStreams(render::Scene& scene) {
         quench::Result<render::ParticleSystemId> sparkles =
             scene.addParticles(streamSparkles(look.color, look.seed, b.streamSlots));
         if (!sparkles) continue;
-        Stream stream{.look = look,
-                      .path = quench::particles::Path(m_courses[std::size_t(i)], true),
-                      .sparkles = *sparkles};
+        Stream stream{
+            .look = look, .path = quench::particles::Path(m_courses[std::size_t(i)], true), .sparkles = *sparkles};
         for (int k = 0; k < b.heads; ++k) {
             const render::TrailId head = scene.addTrail(ribbon(b, look.color, false));
             scene.setTrailSparkles(head, stream.sparkles, b.streamSparkles);
@@ -319,55 +319,85 @@ void Particles::removeStreams(render::Scene& scene) {
 
 void Particles::buildWings(render::Scene& scene) {
     const Budget b = budgetOf(m_quality);
+    // Gold sparkles that drift off the ribbons, sink and go out.
     quench::Result<render::ParticleSystemId> sparkles = scene.addParticles({.maxParticles = b.wingSlots,
                                                                             .seed = 23,
                                                                             .rate = 0.0f,
-                                                                            .lifetime = {0.6f, 1.5f},
-                                                                            .speed = {0.02f, 0.25f},
+                                                                            .lifetime = {0.8f, 1.8f},
+                                                                            .speed = {0.1f, 0.5f},
                                                                             .spread = kPi,
-                                                                            .inherit = 0.15f,
-                                                                            .size = {0.008f, 0.018f},
-                                                                            .gravity = glm::vec3(0.0f, -0.5f, 0.0f),
-                                                                            .drag = 1.6f,
-                                                                            .noise = 0.1f,
+                                                                            .inherit = 0.08f,
+                                                                            .size = {0.025f, 0.05f},
+                                                                            .gravity = glm::vec3(0.0f, -0.35f, 0.0f),
+                                                                            .drag = 1.2f,
+                                                                            .noise = 0.3f,
                                                                             .noiseScale = 1.5f,
-                                                                            .color = glm::vec3(3.0f, 2.2f, 1.1f),
-                                                                            .colorOverLife = fadeInOut(0.05f, 0.5f),
+                                                                            .wind = 0.3f,
+                                                                            .color = glm::vec3(3.2f, 1.7f, 0.45f),
+                                                                            .colorOverLife = fadeInOut(0.05f, 0.45f),
                                                                             .brightnessVariation = 0.5f,
                                                                             .twinkle = 0.7f,
                                                                             .twinkleRate = 4.0f,
                                                                             .sprite = Sprite::Star,
                                                                             .softness = 0.05f,
-                                                                            .nearFade = 0.2f,
-                                                                            .minPixels = 1.2f});
+                                                                            .nearFade = 0.3f,
+                                                                            .minPixels = 1.5f});
     if (sparkles) m_wingSparkles = *sparkles;
-    const TrailDesc wing{.lifetime = 1.3f,
-                         .spacing = 0.04f,
-                         .maxPoints = 192,
-                         .subdivisions = b.subdivisions,
-                         .width = 0.045f,
-                         .widthOverAge = {{0.0f, 0.6f}, {0.08f, 1.0f}, {1.0f, 0.0f}},
-                         .color = glm::vec3(2.4f, 1.25f, 0.4f),
-                         .colorOverAge = {{0.0f, glm::vec4(1.8f, 1.8f, 1.8f, 1.0f)},
-                                          {0.15f, glm::vec4(1.2f, 1.2f, 1.2f, 0.9f)},
-                                          {1.0f, glm::vec4(0.9f, 0.75f, 0.9f, 0.0f)}},
-                         .headSize = 0.05f,
-                         .headColor = glm::vec3(4.0f, 2.8f, 1.4f),
-                         .softness = 0.05f,
-                         .minPixels = 1.2f};
+    // The strips last 1.4 s and at most 10 m (a fast flap's), so that their tails always thin and fade out. The band
+    // is the cape's orange going to gold, wide near the cape and narrowing; most of it is gone by half its life. It
+    // and its haze fade in just behind the cape (the head's glow starts the ribbon): seen from behind, the first of
+    // the strip comes toward the camera over the cape.
+    TrailDesc body{.lifetime = 1.4f,
+                   .spacing = 0.25f,
+                   .maxPoints = 64,
+                   .maxLength = 10.0f,
+                   .subdivisions = b.subdivisions,
+                   .width = 0.55f,
+                   .widthOverAge = {{0.0f, 0.4f}, {0.06f, 1.0f}, {0.4f, 0.65f}, {1.0f, 0.1f}},
+                   .color = glm::vec3(2.2f, 0.8f, 0.18f),
+                   .opacity = 0.9f,
+                   .colorOverAge = {{0.0f, glm::vec4(1.3f, 1.4f, 1.4f, 0.0f)},
+                                    {0.08f, glm::vec4(1.2f, 1.3f, 1.3f, 1.0f)},
+                                    {0.2f, glm::vec4(1.0f, 1.0f, 1.0f, 0.8f)},
+                                    {0.5f, glm::vec4(0.9f, 1.0f, 1.1f, 0.45f)},
+                                    {1.0f, glm::vec4(0.8f, 0.9f, 1.1f, 0.0f)}},
+                   .blend = Blend::Alpha,
+                   .softness = 0.1f,
+                   .minPixels = 1.5f};
+    TrailDesc glow = body;
+    glow.width = 0.1f;
+    glow.widthOverAge = {{0.0f, 0.8f}, {0.05f, 1.0f}, {0.25f, 0.5f}, {0.5f, 0.0f}};
+    glow.color = glm::vec3(2.6f, 1.4f, 0.4f);
+    glow.opacity = 1.0f;
+    glow.colorOverAge = {{0.0f, glm::vec4(1.6f, 1.6f, 1.6f, 1.0f)},
+                         {0.1f, glm::vec4(1.1f, 1.1f, 1.1f, 0.8f)},
+                         {0.25f, glm::vec4(0.8f, 0.8f, 0.85f, 0.3f)},
+                         {0.5f, glm::vec4(0.7f, 0.7f, 0.8f, 0.0f)}};
+    glow.headSize = 0.14f;
+    glow.headColor = glm::vec3(3.4f, 1.9f, 0.6f);
+    glow.blend = Blend::Additive;
+    glow.minPixels = 1.2f;
+    TrailDesc halo = body;
+    halo.width = 1.0f;
+    halo.widthOverAge = {{0.0f, 0.5f}, {0.08f, 1.0f}, {0.5f, 0.7f}, {1.0f, 0.2f}};
+    halo.color = glm::vec3(2.0f, 1.0f, 0.25f);
+    halo.opacity = 0.22f;
+    halo.softness = 0.5f;
+    halo.minPixels = 1.0f;
     for (int i = 0; i < b.wings; ++i) {
-        const render::TrailId t = scene.addTrail(wing);
-        scene.setTrailEmitting(t, false);
-        if (sparkles) scene.setTrailSparkles(t, m_wingSparkles, b.wingSparkles);
-        m_wings.push_back(t);
+        Wing wing{.trails = {scene.addTrail(body), scene.addTrail(glow)}};
+        if (sparkles) scene.setTrailSparkles(wing.trails[1], m_wingSparkles, b.wingSparkles);
+        if (b.halos) wing.trails.push_back(scene.addTrail(halo));
+        for (const render::TrailId t : wing.trails) scene.setTrailEmitting(t, false);
+        m_wings.push_back(std::move(wing));
     }
 }
 
 // Where head k of a stream is at time t: along its course, weaving round it.
 glm::vec3 Particles::headAt(const Stream& stream, int k, double t) const {
     const quench::particles::Path& path = stream.path;
-    const auto along = float(std::fmod(t * double(stream.look.speed), double(path.length())) -
-                             double(float(k) * stream.look.gap));
+    const auto along =
+        float(std::fmod(t * double(stream.look.speed), double(path.length())) - double(float(k) * stream.look.gap));
     const glm::vec3 tangent = path.tangent(along);
     glm::vec3 side = glm::cross(tangent, glm::vec3(0.0f, 1.0f, 0.0f));
     side = glm::length(side) > 1e-3f ? glm::normalize(side) : glm::vec3(1.0f, 0.0f, 0.0f);
@@ -391,19 +421,21 @@ void Particles::update(render::Scene& scene, const World& world, const Frame& f)
     m_sinceFlight = f.flying ? 0.0f : m_sinceFlight + f.dt;
     const bool emit = f.flying || (m_emitting && m_sinceFlight < 0.3f && !f.jump);
     if (emit != m_emitting) {
-        for (const render::TrailId wing : m_wings) scene.setTrailEmitting(wing, emit);
+        for (const Wing& wing : m_wings)
+            for (const render::TrailId t : wing.trails) scene.setTrailEmitting(t, emit);
         m_emitting = emit;
     }
     const std::array<glm::vec3, 2> tips =
         m_wings.size() == 1 ? std::array{f.capeCentre, f.capeCentre} : std::array{f.capeLeft, f.capeRight};
-    for (std::size_t i = 0; i < m_wings.size(); ++i) scene.moveTrail(m_wings[i], tips[i], f.time, jump);
+    for (std::size_t i = 0; i < m_wings.size(); ++i)
+        for (const render::TrailId t : m_wings[i].trails) scene.moveTrail(t, tips[i], f.time, jump);
     if (f.flapped) {
         // A flap scatters a puff of sparkles from the cape.
         std::array<glm::vec3, 24> puff;
         for (std::size_t i = 0; i < puff.size(); ++i) {
             const float t = float(i) / float(puff.size());
-            puff[i] = glm::mix(f.capeLeft, f.capeRight, t) + (f.capeCentre - (f.capeLeft + f.capeRight) * 0.5f) *
-                                                                 (0.5f + std::sin(t * 19.0f));
+            puff[i] = glm::mix(f.capeLeft, f.capeRight, t) +
+                      (f.capeCentre - (f.capeLeft + f.capeRight) * 0.5f) * (0.5f + std::sin(t * 19.0f));
         }
         scene.emitParticles(m_wingSparkles, puff, f.velocity * 0.2f);
     }
