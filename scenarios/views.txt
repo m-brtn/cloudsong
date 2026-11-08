@@ -63,6 +63,9 @@ wait 1.5
 view 70.5 5.2 69.5 58 3.6 57
 wait 0.6
 capture views/cave_light.png
+view 66 4.2 54 61 4.5 64
+wait 0.6
+capture views/cave_roof.png
 view off
 
 # The title.

@@ -10,7 +10,7 @@ A short journey of about ten to fifteen minutes.
 | | |
 |---|---|
 | ![Gliding over the sea of clouds](docs/images/glide.jpg) | ![The isles and the temple of light](docs/images/isles.jpg) |
-| ![A spirit woken by the pond](docs/images/spirit.jpg) | |
+| ![A spirit woken by the pond](docs/images/spirit.jpg) | ![In the green cave, under the light from its roof](docs/images/cave_roof.jpg) |
 
 Everything in it but one font is made by code: the isles, the grass and flowers, the ruins, the figures, their capes,
 the light, the music and the sounds (see `CREDITS.md`).
