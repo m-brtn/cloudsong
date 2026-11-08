@@ -6,11 +6,14 @@
 #include "Journey.h"
 #include "Physics.h"
 #include "Player.h"
+#include "Sound.h"
+#include "Spirits.h"
 #include "World.h"
 
 #include <quench/app/App.h>
 #include <quench/app/Input.h>
 #include <quench/app/Scenario.h>
+#include <quench/core/FileSystem.h>
 #include <quench/core/Log.h>
 #include <quench/physics/PhysicsWorld.h>
 #include <quench/render/Daylight.h>
@@ -25,6 +28,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <format>
 #include <optional>
 
@@ -153,6 +157,10 @@ public:
         }
         m_camera.reset(start + glm::vec3(0.0f, 1.1f, 0.0f), l.startYaw);
         m_journey.reset(l);
+        if (Result<void> spirits = m_spirits.create(*m_scene, *world, l, m_world.takeNavGeometry(), app.jobs());
+            !spirits)
+            return Error{spirits.error()};
+        m_sound.init(app.audio());
 
         // The golden hour: a low warm sun behind the way to the temple, a soft haze over the clouds.
         m_towardSun = render::skyDirection(16.0f, 70.0f);
@@ -201,6 +209,15 @@ public:
 
         m_glow.attach(*m_renderer, app.device());
 
+        // The titles' font (Marcellus, SIL Open Font License; assets/fonts/OFL.txt); ImGui's own without it.
+        if (Result<fs::Bytes> font = fs::readAsset("fonts/Marcellus-Regular.ttf"); font && !font->empty()) {
+            void* data = IM_ALLOC(font->size());
+            std::memcpy(data, font->data(), font->size());
+            m_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(data, int(font->size()), 20.0f);
+        } else {
+            log::warning("game", "no title font: {}", font ? "empty file" : font.error());
+        }
+
         using app::Binding;
         using app::GamepadAxis;
         using app::GamepadButton;
@@ -236,17 +253,45 @@ public:
         in.jumpPressed = in.jumpHeld && !m_jumpWasDown;
         m_jumpWasDown = in.jumpHeld;
         in.cameraYaw = m_camera.yaw;
+        const Landmarks& l = m_world.landmarks();
+        const glm::vec3 local = m_current - glm::vec3(0.0f, kAltitude, 0.0f);
+        // The updraft, once every candle burns: it carries the player up to the height of the temple.
+        if (const glm::vec2 off(local.x - l.updraft.x, local.z - l.updraft.z);
+            updraftOpen() && glm::length(off) < l.updraftRadius * (local.y > l.updraft.y + 2.0f ? 1.6f : 1.0f) &&
+            local.y < l.updraftTop) {
+            in.lift = 9.0f;
+            in.pull = -off * 2.5f;
+        }
+        if (m_ending >= 0.0f) in = PlayerInput{.cameraYaw = m_camera.yaw};
         m_previous = m_current;
+        const float fall = -m_player.velocity().y;
         m_player.step(float(dt), in, *m_physics);
         m_current = m_player.position();
-        const bool called = (input.down(m_call) || m_scriptCall) && !m_callWasDown;
+        const glm::vec3 feet = m_current - glm::vec3(0.0f, kAltitude, 0.0f);
+        if (m_player.flapped()) m_sound.flap();
+        if (m_player.jumped()) m_sound.jump();
+        if (m_player.landed()) m_sound.land(m_world.groundAt(feet), fall);
+        const bool called = (input.down(m_call) || m_scriptCall) && !m_callWasDown && m_ending < 0.0f;
         m_callWasDown = input.down(m_call) || m_scriptCall;
         m_scriptCall = false;
-        if (called) m_callAge = 0.0f;
-        const JourneyEvents events =
-            m_journey.step(float(dt), m_player, m_current - glm::vec3(0.0f, kAltitude, 0.0f), called);
-        if (events.lightTaken >= 0) m_flash = 1.6f;
-        if (events.candleLit >= 0) m_world.setCandleLit(*m_scene, events.candleLit, true);
+        if (called) {
+            m_callAge = 0.0f;
+            m_sound.call();
+        }
+        const JourneyEvents events = m_journey.step(float(dt), m_player, feet, called);
+        if (events.lightTaken >= 0) {
+            m_flash = 1.6f;
+            m_sound.lightTaken(int(m_journey.lightsTaken()));
+        }
+        if (events.candleLit >= 0) candleLit(events.candleLit);
+        // The end: standing at the altar.
+        if (m_ending < 0.0f && m_player.grounded() &&
+            glm::length(glm::vec2(feet.x - l.altar.x, feet.z - l.altar.z)) < 3.2f &&
+            std::abs(feet.y - l.altar.y) < 2.5f) {
+            m_ending = 0.0f;
+            m_endYaw = m_camera.yaw;
+            m_spirits.gather();
+        }
         // Fallen into the clouds: back to the last firm ground.
         if (m_player.grounded() && m_safeTimer <= 0.0f) {
             m_safe = m_current;
@@ -275,6 +320,15 @@ public:
         if (m_scriptCamera) look = glm::vec2(0.0f);
 
         const glm::vec3 feet = glm::mix(m_previous, m_current, float(app.alpha()));
+        if (m_ending >= 0.0f) {
+            // The closing moment: the camera turns slowly round the altar, drawing back and up past the columns.
+            const glm::vec3 altar = m_world.landmarks().altar + glm::vec3(0.0f, kAltitude, 0.0f);
+            const float t = smoothstep(0.0f, 16.0f, m_ending);
+            const float a = m_endYaw + 0.05f * m_ending;
+            const glm::vec3 from = altar + glm::vec3(-std::sin(a), 0.0f, -std::cos(a)) * glm::mix(4.5f, 19.0f, t) +
+                                   glm::vec3(0.0f, glm::mix(1.6f, 9.0f, t), 0.0f);
+            m_endView = std::pair(from, altar + glm::vec3(0.0f, glm::mix(1.2f, 4.0f, t), 0.0f));
+        }
         if (!m_scriptCamera)
             m_camera.update(dt, look, feet + glm::vec3(0.0f, 1.05f, 0.0f), m_player.velocity(), m_player.yaw(),
                             m_player.glide(), *m_physics);
@@ -287,11 +341,28 @@ public:
         pose.glide = m_player.glide();
         pose.flap = m_player.flap();
         pose.wind = m_weather.windAt(feet + glm::vec3(0.0f, 0.8f, 0.0f)) * 0.3f;
+        if (m_ending >= 0.0f) pose.pray = smoothstep(1.0f, 3.0f, m_ending) * (1.0f - smoothstep(9.0f, 11.0f, m_ending));
         const float pitch = m_player.glide() * 1.1f;
         m_figure.setPlacement(feet, m_player.yaw(), pitch);
         m_figure.update(dt, pose, [this](glm::vec3 from) { return groundBelow(*m_physics, from, 1.2f); });
         m_scene->setTransform(m_figureInstance, m_figure.transform());
         m_scene->setJointPalette(m_figureInstance, m_figure.palette());
+        if (m_figure.stepped()) m_sound.footstep(m_world.groundAt(feet - glm::vec3(0.0f, kAltitude, 0.0f)), pose.speed);
+        if (m_ending >= 0.0f) m_ending += dt;
+        m_spirits.update(
+            dt, {.feet = feet, .yaw = m_player.yaw(), .grounded = m_player.grounded(), .airTime = m_player.airTime()},
+            *m_scene, *m_physics);
+        {
+            const glm::vec3 eyeNow = eye();
+            const glm::vec3 v = m_player.velocity();
+            const float air = m_player.grounded() ? 0.0f : glm::length(v) * (0.4f + 0.6f * m_player.glide());
+            m_sound.update({.listener = eyeNow,
+                            .forward = glm::normalize(feet + glm::vec3(0.0f, 1.0f, 0.0f) - eyeNow),
+                            .wind = 2.5f + air,
+                            .spirits = m_spirits.awake(),
+                            .ending = smoothstep(0.0f, 8.0f, m_ending)},
+                           frameDt);
+        }
         m_flash = std::max(0.0f, m_flash - dt * 2.0f);
         if (m_player.flapped()) m_flash = 1.0f;
         m_scene->setInstanceColor(m_figureInstance, glm::vec4(1.0f),
@@ -312,8 +383,35 @@ public:
         m_glow.begin(glm::vec3(inv[0]), glm::vec3(inv[1]), m_time);
         const glm::vec3 alt(0.0f, kAltitude, 0.0f);
         const Landmarks& l = m_world.landmarks();
-        m_glow.beam(l.beamBase + alt, 1.4f, l.beamBase + alt + glm::vec3(0.0f, 900.0f, 0.0f), 3.0f,
-                    glm::vec3(3.2f, 2.6f, 1.8f), 0.02f, 0.4f);
+        const float bright =
+            m_ending >= 0.0f ? smoothstep(2.0f, 7.0f, m_ending) * (0.5f + 0.5f * float(m_spirits.awake())) : 0.0f;
+        m_glow.beam(l.beamBase + alt, 1.4f + 0.8f * bright, l.beamBase + alt + glm::vec3(0.0f, 900.0f, 0.0f),
+                    3.0f + 2.0f * bright, glm::vec3(3.2f, 2.6f, 1.8f) * (1.0f + 1.6f * bright), 0.02f, 0.4f);
+        if (bright > 0.0f)
+            m_glow.beam(l.beamBase + alt, 0.6f + 0.6f * bright, l.beamBase + alt + glm::vec3(0.0f, 60.0f, 0.0f),
+                        1.6f + 1.5f * bright, glm::vec3(3.0f, 2.5f, 1.7f) * bright, 0.01f, 0.85f, 5.0f);
+        if (m_ending >= 2.0f) {
+            // Rings of light rise from the altar.
+            for (int k = 0; k < 3; ++k) {
+                const float age = std::fmod(m_ending - 2.0f + float(k) * 1.3f, 4.0f);
+                m_glow.ring(l.altar + alt + glm::vec3(0.0f, 0.2f + age * 3.0f, 0.0f), 2.0f + age * 2.5f, 0.35f,
+                            bright * (1.0f - age / 4.0f), glm::vec3(2.4f, 2.0f, 1.3f));
+            }
+        }
+        // The updraft: a column of rising motes and a faint shaft once it is open.
+        if (updraftOpen()) {
+            m_glow.beam(l.updraft + alt, l.updraftRadius * 0.8f,
+                        l.updraft + alt + glm::vec3(0.0f, l.updraftTop - l.updraft.y, 0.0f), l.updraftRadius,
+                        glm::vec3(0.9f, 1.0f, 1.1f) * 0.5f, 0.05f, 0.6f, 3.0f);
+            m_glow.motes(l.updraft + alt + glm::vec3(0.0f, 10.0f, 0.0f),
+                         glm::vec3(l.updraftRadius, 10.0f, l.updraftRadius), 120, 0.05f, 2.0f,
+                         glm::vec3(2.4f, 2.4f, 2.0f), 9.0f);
+        }
+        // The spirits' soft glow.
+        for (int i = 0; i < int(m_spirits.count()); ++i)
+            if (const float g = m_spirits.glow(i); g > 0.0f)
+                m_glow.sprite(m_spirits.position(i) + glm::vec3(0.0f, 0.62f, 0.0f), 0.75f,
+                              (m_spirits.color(i) * 0.9f + glm::vec3(0.25f)) * g, 0.0f);
         for (const glm::vec3& shaft : l.caveShafts)
             m_glow.beam(shaft + alt + glm::vec3(-1.6f, 7.2f, 0.8f), 0.55f, shaft + alt, 0.95f,
                         glm::vec3(1.2f, 1.1f, 0.8f), 0.1f, 0.75f);
@@ -348,6 +446,7 @@ public:
 
     void ui(App& app) override {
         (void)app;
+        if (m_ending >= 6.0f) endingCard();
         if (!m_debugUi) return;
         ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Cloudsong", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -371,6 +470,8 @@ public:
     void shutdown(App& app) override {
         (void)app;
         m_glow.detach();
+        m_sound.shutdown();
+        m_spirits.destroy();
         m_player.destroy();
         m_scene.reset();
         m_renderer.reset();
@@ -398,12 +499,37 @@ public:
         if (name == "vx")
             return m_player.velocity().x * std::sin(m_player.yaw()) + m_player.velocity().z * std::cos(m_player.yaw());
         if (name == "vy") return m_player.velocity().y;
+        if (name == "awake") return m_spirits.awake();
+        if (name == "walking") return m_spirits.walking();
+        if (name == "nav_ready") return m_spirits.navReady() ? 1.0 : 0.0;
+        if (name == "ending") return m_ending;
+        if (name == "updraft") return updraftOpen() ? 1.0 : 0.0;
+        if (name == "seated") return m_spirits.seated();
+        if (name == "altar_dist") {
+            const glm::vec3 a = m_world.landmarks().altar;
+            return glm::length(glm::vec2(p.x - a.x, p.z - a.z));
+        }
+        if (name == "candle_dist") {
+            double best = 1e9;
+            const Landmarks& l = m_world.landmarks();
+            for (std::size_t i = 0; i < l.candles.size(); ++i)
+                if (!m_journey.candleLit(i))
+                    best = std::min(best, double(glm::length(glm::vec2(p.x - l.candles[i].x, p.z - l.candles[i].z))));
+            return best;
+        }
+        if (name == "spirit_far") {
+            double far = 0.0;
+            for (int i = 0; i < int(m_spirits.count()); ++i)
+                if (m_spirits.state(i) != Spirits::State::Dormant)
+                    far = std::max(far, double(m_spirits.distanceTo(i, m_player.position())));
+            return far;
+        }
         return std::nullopt;
     }
 
     // teleport X Y Z [YAW]: the player to a local point. camera YAW PITCH DISTANCE: the orbit (orbit: its yaw from
-    // behind the player). view EX EY EZ TX TY TZ:
-    // a fixed camera (local points); view off: the orbit again. move X Y: hold the stick; jump down|up; call.
+    // behind the player). light I: candle I lit. aim X Z: the orbit's heading toward a local point. view EX EY EZ TX TY
+    // TZ: a fixed camera (local points); view off: the orbit again. move X Y: hold the stick; jump down|up; call.
     app::ScenarioExec scenarioCommand(App& app, const app::ScenarioCommand& command) override {
         (void)app;
         const auto& a = command.args;
@@ -425,6 +551,22 @@ public:
             m_camera.reset(m_current + glm::vec3(0.0f, 1.05f, 0.0f), yaw);
             m_camera.pitch = f(1);
             m_cut = true;
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "light" && a.size() == 1) {
+            // light I: candle I lit (its spirit wakes), as if called; for checks of the later parts.
+            const int i = int(f(0));
+            if (i < 0 || i >= int(m_world.landmarks().candles.size())) return app::ScenarioExec::Unknown;
+            if (!m_journey.candleLit(std::size_t(i))) {
+                m_journey.lightCandle(std::size_t(i));
+                candleLit(i);
+            }
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "aim" && a.size() >= 2) {
+            // The orbit behind the player, looking toward a local point.
+            const glm::vec3 p = m_current - glm::vec3(0.0f, kAltitude, 0.0f);
+            m_camera.yaw = std::atan2(f(0) - p.x, f(1) - p.z);
             return app::ScenarioExec::Done;
         }
         if (command.op == "view" && a.size() == 1 && a[0] == "off") {
@@ -473,10 +615,52 @@ public:
     }
 
 private:
-    glm::vec3 eye() const { return m_scriptCamera ? m_scriptCamera->first : m_camera.eye(); }
+    // The closing card over the last view: the title, the spirits brought home, thanks.
+    void endingCard() {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(vp->Pos);
+        ImGui::SetNextWindowSize(vp->Size);
+        ImGui::Begin("##ending", nullptr,
+                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs |
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+        const float fade = smoothstep(6.0f, 9.0f, m_ending);
+        const float scale = vp->Size.y / 360.0f / ImGui::GetStyle().FontScaleDpi;
+        auto line = [&](const char* text, float size, float y, float alpha) {
+            ImGui::PushFont(m_font, 13.0f * size * scale);
+            const ImVec2 extent = ImGui::CalcTextSize(text);
+            ImGui::SetCursorPos(ImVec2((vp->Size.x - extent.x) * 0.5f, vp->Size.y * y));
+            // A soft shadow under the letters.
+            ImGui::SetCursorPos(ImVec2((vp->Size.x - extent.x) * 0.5f + 1.5f * scale, vp->Size.y * y + 1.5f * scale));
+            ImGui::TextColored(ImVec4(0.25f, 0.18f, 0.12f, alpha * 0.35f), "%s", text);
+            ImGui::SetCursorPos(ImVec2((vp->Size.x - extent.x) * 0.5f, vp->Size.y * y));
+            ImGui::TextColored(ImVec4(1.0f, 0.97f, 0.9f, alpha), "%s", text);
+            ImGui::PopFont();
+        };
+        line("Cloudsong", 3.0f, 0.2f, fade);
+        const int home = m_spirits.awake();
+        const std::string spirits = home == int(m_spirits.count())
+                                        ? "Every spirit is home."
+                                        : std::format("{} of {} spirits are home.", home, m_spirits.count());
+        line(spirits.c_str(), 1.1f, 0.34f, fade * 0.9f);
+        line("Thank you for playing.", 0.9f, 0.82f, smoothstep(10.0f, 13.0f, m_ending) * 0.85f);
+        ImGui::End();
+    }
+
+    void candleLit(int candle) {
+        m_world.setCandleLit(*m_scene, candle, true);
+        m_spirits.wake(candle);
+        const glm::vec3 at = m_world.landmarks().candles[std::size_t(candle)] + glm::vec3(0.0f, kAltitude, 0.0f);
+        m_sound.candleLit(at);
+        m_sound.spiritWakes(at);
+    }
+    bool updraftOpen() const { return m_journey.candlesLit() == m_world.landmarks().candles.size(); }
+    glm::vec3 eye() const {
+        return m_scriptCamera ? m_scriptCamera->first : m_endView ? m_endView->first : m_camera.eye();
+    }
     glm::mat4 viewMatrix() const {
         if (m_scriptCamera)
             return glm::lookAt(m_scriptCamera->first, m_scriptCamera->second, glm::vec3(0.0f, 1.0f, 0.0f));
+        if (m_endView) return glm::lookAt(m_endView->first, m_endView->second, glm::vec3(0.0f, 1.0f, 0.0f));
         return m_camera.view();
     }
 
@@ -512,6 +696,12 @@ private:
     float m_callAge = 100.0f;
     glm::vec3 m_callCentre{0.0f};
     Journey m_journey;
+    Spirits m_spirits;
+    Sound m_sound;
+    float m_ending = -1.0f; // seconds since the end began
+    ImFont* m_font = nullptr;
+    float m_endYaw = 0.0f;
+    std::optional<std::pair<glm::vec3, glm::vec3>> m_endView;
     glm::vec2 m_scriptMove{0.0f};
     bool m_scriptJump = false;
 };
@@ -523,6 +713,11 @@ Result<std::unique_ptr<quench::app::Game>> quench::app::createGame(AppDesc& desc
     desc.name = QUENCH_GAME_NAME;
     desc.organization = "Quench";
     desc.version = QUENCH_GAME_VERSION;
+    desc.audio.buses = {
+        {.name = "music"},
+        {.name = "effects"},
+        {.name = "ui"},
+        {.name = "reverb", .volume = 0.8f, .reverb = quench::audio::ReverbDesc{.roomSize = 0.86f, .damping = 0.45f}}};
     for (const std::string_view arg : args) {
         if (arg == "--help") {
             std::printf("%s: no options of its own.\n", QUENCH_GAME_NAME);

@@ -7,6 +7,7 @@
 
 #include "Util.h"
 
+#include <quench/navigation/NavMesh.h>
 #include <quench/physics/PhysicsWorld.h>
 #include <quench/render/Scene.h>
 
@@ -91,6 +92,8 @@ public:
     // The local ground height below a local point (the isles' terrain, not the ruins).
     std::optional<float> terrainHeight(glm::vec2 xz) const;
     Ground groundAt(glm::vec3 local) const;
+    // What the spirits walk on (local coordinates): the static geometry near the way, collected by build().
+    quench::navigation::Geometry takeNavGeometry() { return std::move(m_nav); }
 
 private:
     struct Patch {
@@ -109,6 +112,7 @@ private:
     void addStatic(quench::PhysicsWorld& physics, const MeshData& mesh);
     void addBox(quench::PhysicsWorld& physics, glm::vec3 centre, glm::vec3 half, float yaw);
     bool excluded(glm::vec2 xz) const;
+    void addNavTriangle(glm::vec3 a, glm::vec3 b, glm::vec3 c);
 
     std::vector<Isle> m_isles;
     Landmarks m_landmarks;
@@ -121,6 +125,7 @@ private:
     std::vector<quench::render::InstanceId> m_flames;
     quench::render::MaterialDesc m_grassDesc;
     float m_detailDistance = 34.0f;
+    quench::navigation::Geometry m_nav;
 };
 
 } // namespace cloudsong

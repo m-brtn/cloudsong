@@ -14,10 +14,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # The engine at a pinned commit. Working on the engine at the same time: configure with
 # -DFETCHCONTENT_SOURCE_DIR_QUENCH=<engine checkout>.
 include(FetchContent)
-# main after v0.11.0: the camera above the clouds
+# main after v0.11.0: the camera above the clouds, quench_weather_sounds() in games
 FetchContent_Declare(quench
     GIT_REPOSITORY https://github.com/m-brtn/Quench.git
-    GIT_TAG 4a22a0f9b7783a088771c59679f91dbb8f9c501a)
+    GIT_TAG 56d0b8fa586fed99b43a6405a840c8b78e51608e)
 FetchContent_MakeAvailable(quench)
 
 # The host-tools preset builds only the engine's shader compiler and asset cooker (for the iOS builds).
@@ -25,18 +25,22 @@ if(QUENCH_HEADLESS)
     return()
 endif()
 
+# The engine's default wind sounds (procedural), cooked at build time.
+quench_weather_sounds(cloudsong_weather_sounds)
 quench_add_game(cloudsong
     NAME "Cloudsong"
     BUNDLE_ID org.quench.cloudsong
     ICON icon/icon.png
     ASSETS assets
+    COOKED_ASSETS cloudsong_weather_sounds
     ORIENTATIONS landscape
-    SOURCES src/Game.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Journey.cpp src/Player.cpp)
+    SOURCES src/Game.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Journey.cpp src/Player.cpp
+        src/Spirits.cpp src/Sound.cpp)
 target_include_directories(cloudsong PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(cloudsong PRIVATE -Wall -Wextra)
 endif()
-target_link_libraries(cloudsong PRIVATE quench_render quench_physics quench_animation)
+target_link_libraries(cloudsong PRIVATE quench_render quench_physics quench_animation quench_navigation)
 quench_add_shaders(cloudsong NAME world SOURCE shaders/world.hlsl
     ENTRIES surface_vs:vertex surface_fs:fragment surface_basic_fs:fragment)
 quench_add_shaders(cloudsong NAME foliage SOURCE shaders/foliage.hlsl
@@ -47,5 +51,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
     add_test(NAME smoke COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/smoke.txt)
     add_test(NAME flight COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/flight.txt)
-    set_tests_properties(smoke flight PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
+    add_test(NAME journey COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/journey.txt)
+    add_test(NAME sound COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/sound.txt)
+    set_tests_properties(smoke flight journey sound PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
 endif()

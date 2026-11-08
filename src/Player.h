@@ -21,6 +21,7 @@ struct PlayerInput {
     bool jumpHeld = false;
     float cameraYaw = 0.0f; // the camera's heading (radians; 0 looks along +z)
     float lift = 0.0f;      // an updraft's pull (m/s upward it carries a glider to)
+    glm::vec2 pull{0.0f};   // and its pull toward its middle (m/s² in x and z)
 };
 
 class Player {

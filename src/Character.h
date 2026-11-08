@@ -97,6 +97,8 @@ public:
     float scale() const { return m_look.scale; }
     // The middle of the collar and of the hem (world).
     glm::vec3 capePoint(int row) const { return m_cloth[std::size_t(row * kCapeCols + kCapeCols / 2)]; }
+    // A foot came down in the last update (footsteps).
+    bool stepped() const { return m_stepped; }
 
 private:
     void forward(const std::array<glm::quat, kBodyJoints>& local, glm::vec3 hipsOffset);
@@ -125,6 +127,8 @@ private:
     float m_rowLength = 0.1f;
     std::array<float, kCapeRows> m_rowWidth{};
     bool m_clothValid = false;
+    int m_halfStep = 0;
+    bool m_stepped = false;
     glm::vec3 m_lastFeet{0.0f};
 };
 

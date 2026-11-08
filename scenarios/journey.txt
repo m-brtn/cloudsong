@@ -1,0 +1,110 @@
+# The journey (ctest `journey`): the whole way through, with teleports only between its parts. The player runs to
+# the first spirit by the pond and calls: the candle lights and the spirit wakes and walks after the player (on the
+# navmesh). The flight check's hops to the spirit isle, the spirit gliding after; the second candle and spirit; the
+# cave's candle and spirit. With every candle lit the updraft opens: it lifts the player, who glides to the temple's
+# mesa, walks to the altar, and the spirits gather round it.
+#   cloudsong --script scenarios/journey.txt
+
+wait 0.5
+until nav_ready == 1 10
+expect updraft == 0
+aim -20.4 -15.2
+move 0 1
+until candle_dist < 2.0 9
+move 0 0
+wait 0.4
+call
+wait 0.1
+expect candles == 1
+expect awake == 1
+wait 2.2
+expect walking == 1
+
+# Across the gaps to the spirit isle; the spirit follows through the air.
+teleport -22.2 3 28.4 -0.664
+wait 0.8
+move 0 1
+wait 1.5
+jump down
+wait 0.3
+jump up
+wait 0.05
+jump down
+until glide > 0.5 2
+until grounded == 1 4
+expect lights >= 1
+move 0 0
+jump up
+wait 1.0
+teleport -36 4 46 -0.534
+wait 0.6
+move 0 1
+wait 0.6
+jump down
+wait 0.3
+jump up
+wait 0.05
+jump down
+wait 0.5
+jump up
+wait 0.05
+jump down
+until grounded == 1 8
+expect x < -52
+expect z > 78
+move 0 0
+jump up
+until spirit_far < 6 6
+
+# The second spirit, by the arch.
+teleport -64 3 90 -2.55
+wait 0.5
+call
+wait 0.1
+expect candles == 2
+expect awake == 2
+
+# The cave's spirit.
+teleport 58.3 4 57.4 0.352
+wait 0.5
+aim 60.8 64.2
+move 0 1
+until candle_dist < 2.0 5
+move 0 0
+wait 0.3
+call
+wait 0.1
+expect candles == 3
+expect awake == 3
+expect updraft == 1
+wait 2.5
+expect walking >= 1
+
+# The updraft lifts the player; the glide to the temple.
+teleport -27 2 128 1.571
+wait 0.5
+aim -20 128
+move 0 1
+until y > 3 6
+move 0 0
+until y > 100 25
+aim 10 218
+move 0 1
+jump down
+until glide > 0.5 4
+until altar_dist < 19 30
+jump up
+until grounded == 1 8
+expect y > 60
+expect altar_dist < 14
+aim 10 218
+move 0 1
+until ending >= 0 12
+move 0 0
+expect altar_dist < 3.3
+until seated == 3 25
+wait 4
+view 10 70 205 10 66 218
+wait 0.2
+capture journey_end.png
+quit

@@ -31,6 +31,7 @@ public:
     // Seconds since the light was taken (negative: not taken).
     float lightAge(std::size_t light) const { return m_lightAge[light]; }
     bool candleLit(std::size_t candle) const { return m_candleLit[candle]; }
+    void lightCandle(std::size_t candle) { m_candleLit[candle] = true; }
     std::size_t candlesLit() const;
     bool warm() const { return m_warm; } // near a flame in the last step
 

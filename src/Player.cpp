@@ -87,7 +87,8 @@ void Player::step(float dt, const PlayerInput& in, quench::PhysicsWorld& physics
         const glm::vec2 h = approach2({v.x, v.z}, glm::vec2(wish.x, wish.z) * speed, 22.0f * dt);
         // No fall speed kept on the ground: it would eat the speed up a slope.
         v = glm::vec3(h.x, 0.0f, h.y);
-        if (in.jumpPressed) jump = true;
+        // A jump, or an updraft that takes the player up.
+        if (in.jumpPressed || in.lift > 0.0f) jump = true;
         m_glide = approach(m_glide, 0.0f, 0.06f, dt);
         if (amount > 0.1f) m_yaw = turnToward(m_yaw, std::atan2(wish.x, wish.z), 11.0f * dt);
     } else {
@@ -122,7 +123,12 @@ void Player::step(float dt, const PlayerInput& in, quench::PhysicsWorld& physics
             v.z = h.y;
             if (amount > 0.1f) m_yaw = turnToward(m_yaw, std::atan2(wish.x, wish.z), 5.0f * dt);
         }
-        if (in.lift > 0.0f) v.y = approach(v.y, in.lift, glm::mix(0.6f, 0.3f, m_glide), dt);
+        if (in.lift > 0.0f) {
+            // The rising air carries the weight.
+            v.y = approach(v.y + kGravity * dt * (1.0f - 0.9f * m_glide), in.lift, glm::mix(0.6f, 0.3f, m_glide), dt);
+            v.x += (in.pull.x - v.x * 0.8f) * dt;
+            v.z += (in.pull.y - v.z * 0.8f) * dt;
+        }
         v.y = std::max(v.y, -40.0f);
     }
     if (jump) {

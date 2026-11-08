@@ -317,6 +317,9 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
     const float stride = glm::mix(0.8f, 1.45f, run);
     if (in.grounded) m_phase = std::fmod(m_phase + s / stride * kTau * dt, kTau * 64.0f);
     const float ph = m_phase;
+    const int halfStep = int(std::floor((ph + 0.5f * kPi) / kPi));
+    m_stepped = halfStep != m_halfStep && in.grounded && move > 0.3f && in.sit < 0.5f;
+    m_halfStep = halfStep;
     const float walk = (1.0f - m_air) * (1.0f - in.sit);
     const float air = m_air * (1.0f - in.glide);
     const float glide = in.glide;

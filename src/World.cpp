@@ -139,7 +139,8 @@ World::World() {
                 glm::vec3(-28.4f, 3.4f, 36.2f), glm::vec3(-50.0f, 5.0f, 68.0f),  ground(-58.0f, 96.0f, 1.5f),
                 ground(-24.0f, 122.0f, 1.5f),   glm::vec3(-6.0f, 97.0f, 160.0f), ground(4.0f, 178.0f, 1.6f),
                 ground(15.0f, 211.0f, 1.6f)};
-    l.candles = {ground(8.0f, -19.0f, 1.05f), ground(68.0f, 67.0f, 1.05f), ground(-58.0f, 93.0f, 1.05f)};
+    // A candle before each spirit: the call lights it and wakes the spirit.
+    l.candles = {ground(-20.4f, -15.2f, 1.05f), ground(60.8f, 64.2f, 1.05f), ground(-65.2f, 88.2f, 1.05f)};
     l.lanterns = {ground(5.0f, -33.0f, 1.05f), ground(-33.5f, 42.5f, 1.05f), ground(-14.5f, 123.0f, 1.05f)};
     l.spirits = {ground(-21.5f, -16.0f, 0.0f), ground(59.5f, 64.5f, 0.0f), ground(-66.0f, 87.0f, 0.0f)};
     l.spiritYaw = {0.9f, 1.8f, 0.6f};
@@ -195,6 +196,7 @@ void World::addStatic(quench::PhysicsWorld& physics, const MeshData& mesh) {
         const glm::vec3 c = mesh.vertices[mesh.indices[i + 2]].position;
         if (glm::length(glm::cross(b - a, c - a)) < 1e-6f) continue; // degenerate (a dome's crown)
         triangles.push_back(JPH::Triangle(p(0), p(1), p(2)));
+        addNavTriangle(a, b, c);
     }
     JPH::MeshShapeSettings settings(triangles);
     JPH::ShapeSettings::ShapeResult shape = settings.Create();
@@ -207,11 +209,33 @@ void World::addStatic(quench::PhysicsWorld& physics, const MeshData& mesh) {
     physics.bodies().CreateAndAddBody(body, JPH::EActivation::DontActivate);
 }
 
+void World::addNavTriangle(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+    // Only the isles of the way (not the far ones); world to local.
+    const glm::vec3 m = (a + b + c) / 3.0f - kAlt;
+    if (m.x < -85.0f || m.x > 95.0f || m.z < -55.0f || m.z > 250.0f) return;
+    const auto first = std::uint32_t(m_nav.vertices.size());
+    for (const glm::vec3& v : {a, b, c}) m_nav.vertices.push_back(v - kAlt);
+    m_nav.indices.insert(m_nav.indices.end(), {first, first + 1, first + 2});
+}
+
 void World::addBox(quench::PhysicsWorld& physics, glm::vec3 centre, glm::vec3 half, float yaw) {
     const JPH::BodyCreationSettings body(
         new JPH::BoxShape(JPH::Vec3(half.x, half.y, half.z), 0.02f), JPH::RVec3(centre.x, centre.y, centre.z),
         JPH::Quat::sRotation(JPH::Vec3::sAxisY(), yaw), JPH::EMotionType::Static, quench::PhysicsLayers::kStatic);
     physics.bodies().CreateAndAddBody(body, JPH::EActivation::DontActivate);
+    // Its faces for the navmesh (counter-clockwise from outside).
+    const glm::mat4 m = glm::translate(glm::mat4(1.0f), centre) *
+                        glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::scale(glm::mat4(1.0f), half);
+    auto corner = [&](int i) {
+        return glm::vec3(m * glm::vec4(i & 1 ? 1.0f : -1.0f, i & 2 ? 1.0f : -1.0f, i & 4 ? 1.0f : -1.0f, 1.0f));
+    };
+    static constexpr int kFaces[6][4] = {{0, 4, 6, 2}, {1, 3, 7, 5}, {0, 1, 5, 4},
+                                         {2, 6, 7, 3}, {0, 2, 3, 1}, {4, 5, 7, 6}};
+    for (const auto& f : kFaces) {
+        addNavTriangle(corner(f[0]), corner(f[1]), corner(f[2]));
+        addNavTriangle(corner(f[0]), corner(f[2]), corner(f[3]));
+    }
 }
 
 void World::buildIsle(render::Scene& scene, quench::PhysicsWorld& physics, const Isle& isle) {
@@ -634,30 +658,39 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
     }
     // The temple: three round tiers, a ring of columns under a ring of stone, an altar.
     {
+        // Steps of 0.35 m from the lowest ground under them, so that the player can walk up from anywhere.
+        float low = m_landmarks.altar.y;
+        for (int i = 0; i < 48; ++i)
+            for (const float r : {0.0f, 5.0f, 9.0f, 11.2f}) {
+                const float a = kTau * float(i) / 48.0f;
+                low = std::min(low,
+                               groundY(m_landmarks.altar.x + std::cos(a) * r, m_landmarks.altar.z + std::sin(a) * r));
+            }
+        const std::array<std::pair<float, float>, 5> tiers = {
+            {{11.0f, 0.35f}, {9.8f, 0.7f}, {8.6f, 1.05f}, {7.4f, 1.4f}, {6.2f, 1.75f}}};
+        m_landmarks.altar.y = low;
         const glm::vec3 c = m_landmarks.altar;
-        const std::array<std::pair<float, float>, 3> tiers = {{{8.6f, 0.4f}, {7.4f, 0.8f}, {6.2f, 1.2f}}};
         for (const auto& [radius, top] : tiers) {
             MeshData tier = render::cylinderMesh(radius, (top + 1.0f) * 0.5f, 48);
             append(stones, tier, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, (top - 1.0f) * 0.5f, 0.0f)),
                    glm::vec4(stoneColor(random), 1.0f));
         }
-        MeshData collider;
-        for (const auto& [radius, top] : tiers) {
-            MeshData tier = render::cylinderMesh(radius, (top + 1.0f) * 0.5f, 24);
-            append(collider, tier,
-                   glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, (top - 1.0f) * 0.5f, 0.0f)));
-        }
+        // The feet walk a smooth cone over the steps' edges (the character would catch on each riser).
+        MeshData collider = lathe({{0.01f, -1.0f}, {11.4f, -1.0f}, {11.2f, -0.1f}, {6.2f, 1.75f}, {0.01f, 1.75f}}, 32);
+        for (Vertex& v : collider.vertices) v.position += c + kAlt;
         addStatic(physics, collider);
         for (int i = 0; i < 10; ++i) {
             const float a = kTau * float(i) / 10.0f;
-            column(c + glm::vec3(std::cos(a) * 5.4f, 1.2f, std::sin(a) * 5.4f), 6.2f, 0.4f, false);
+            column(c + glm::vec3(std::cos(a) * 5.4f, 1.75f, std::sin(a) * 5.4f), 6.2f, 0.4f, false);
         }
         MeshData ring = render::torusMesh(5.4f, 0.55f, 64, 12);
         for (Vertex& v : ring.vertices) v.position.y *= 0.6f;
         computeNormals(ring);
-        append(stones, ring, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 7.7f, 0.0f)),
+        append(stones, ring, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 8.25f, 0.0f)),
                glm::vec4(stoneColor(random), 1.0f));
-        block(c + glm::vec3(0.0f, 1.6f, 0.0f), glm::vec3(0.8f, 0.4f, 0.8f), 0.0f);
+        block(c + glm::vec3(0.0f, 2.15f, 0.0f), glm::vec3(0.8f, 0.4f, 0.8f), 0.0f);
+        m_landmarks.altar.y = c.y + 1.75f;
+        m_landmarks.beamBase = c + glm::vec3(0.0f, 2.55f, 0.0f);
     }
 
     computeTangents(stones);

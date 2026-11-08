@@ -1,0 +1,36 @@
+# Sound check (ctest `sound`), by measurement of the mix (offline on the frame clock): the score plays from the
+# start without clipping; the call's chime is louder than the score, with its bell partials between 500 and 1800 Hz;
+# running plays footsteps; a jump and a flap play their sounds; no sound fails to load, no stream runs dry.
+#   cloudsong --script scenarios/sound.txt [--audio-capture mix.wav]
+
+wait 6
+audio_measure 3
+expect audio_rms > 0.01
+expect audio_peak < 0.8
+expect audio_clipped == 0
+call
+wait 0.4
+audio_measure 0.4 300 2000
+expect audio_rms > 0.04
+expect audio_freq > 500
+expect audio_freq < 1800
+wait 2
+mark audio_played
+move 0 1
+wait 2
+expect d_audio_played >= 4
+move 0 0
+mark audio_played
+jump down
+wait 0.3
+jump up
+wait 0.05
+jump down
+wait 0.2
+expect d_audio_played >= 2
+jump up
+wait 1
+expect audio_failed == 0
+expect audio_underruns == 0
+expect audio_clipped == 0
+quit
