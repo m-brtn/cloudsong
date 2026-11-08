@@ -2,10 +2,12 @@
 // between them, gathers drifting lights, lights candles, wakes the spirits and brings them to the temple of light.
 
 #include "Character.h"
+#include "Front.h"
 #include "Glow.h"
 #include "Journey.h"
 #include "Physics.h"
 #include "Player.h"
+#include "Settings.h"
 #include "Sound.h"
 #include "Spirits.h"
 #include "World.h"
@@ -126,7 +128,17 @@ public:
         if (!foliage) return Error{foliage.error()};
         m_worldSurface = *world;
 
-        const float grass = app.mobile() ? 0.45f : 1.0f;
+        // The player's settings (scripted runs start from the defaults and leave the user's file alone).
+        m_settings = defaultSettings(app.mobile());
+        if (!app.scripted())
+            if (Result<std::string> text = fs::readUserText("settings.json"); text)
+                m_settings = parseSettings(*text, m_settings);
+        m_screen = app.scripted() ? Screen::Playing : Screen::Title;
+        m_touchUi = app.mobile();
+        // The grass's density is the quality's at startup.
+        const float grass = m_settings.quality == Quality::High     ? 1.0f
+                            : m_settings.quality == Quality::Medium ? 0.55f
+                                                                    : 0.35f;
         if (Result<void> built = m_world.build(*m_scene, *m_physics, *world, *foliage, grass); !built)
             return Error{built.error()};
         m_physics->optimizeBroadPhase();
@@ -162,23 +174,8 @@ public:
             return Error{spirits.error()};
         m_sound.init(app.audio());
 
-        // The golden hour: a low warm sun behind the way to the temple, a soft haze over the clouds.
-        m_towardSun = render::skyDirection(16.0f, 70.0f);
-        const render::Daylight day = render::daylightFor(m_towardSun);
-        m_sun = m_scene->addLight({.type = render::LightType::Directional,
-                                   .color = day.sunColor * glm::vec3(1.25f, 1.05f, 0.85f) * 1.15f,
-                                   .direction = -m_towardSun});
-        render::Environment env = day.environment;
-        env.skyAmbient = glm::mix(env.skyAmbient, glm::vec3(0.55f, 0.6f, 0.75f), 0.5f) * 1.25f;
-        env.groundAmbient = glm::vec3(0.55f, 0.48f, 0.42f);
-        env.skyGround = glm::vec3(1.05f, 0.95f, 0.92f);
-        env.fogDensity = 0.00035f;
-        env.fogFalloff = 0.0009f;
-        env.fogBaseHeight = kAltitude;
-        env.fogMaxAmount = 0.75f;
-        env.fogSunScatter = 0.8f;
-        env.fogColor = glm::vec3(0.74f, 0.76f, 0.86f);
-        m_scene->setEnvironment(env);
+        m_sun = m_scene->addLight({.type = render::LightType::Directional});
+        applyMood();
 
         weather::Settings ws;
         ws.seed = 7;
@@ -193,19 +190,12 @@ public:
         m_weather.setSettings(ws);
         m_weather.setTime(1800.0);
 
-        render::RenderSettings rs = m_renderer->settings();
-        rs.clouds = render::Clouds::Volumetric;
-        rs.cloudShadows = false;
-        rs.cloudResolution = 0.5f;
-        rs.shadowDistance = 90.0f;
-        rs.shadowCascades = 3;
-        rs.bloom = true;
-        rs.bloomStrength = 0.09f;
-        rs.bloomThreshold = 1.3f;
-        rs.toneCurve = render::ToneCurve::Agx;
-        rs.vignette = 0.22f;
-        rs.reflections = render::Reflections::ScreenSpace;
-        m_renderer->setSettings(rs);
+        applySettings(app);
+        if (app.mobile()) {
+            // A calm game: 60 Hz on phones, less when they grow hot.
+            app.setMaxFrameRate(60.0);
+            app.thermalGovernor().enable({});
+        }
 
         m_glow.attach(*m_renderer, app.device());
 
@@ -217,6 +207,10 @@ public:
         } else {
             log::warning("game", "no title font: {}", font ? "empty file" : font.error());
         }
+        m_menus.setFont(m_font);
+        m_menus.setTouch(m_touchUi);
+        // A gamepad moves through the menus; the keyboard's Space, Return and Escape are the game's own.
+        ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
         using app::Binding;
         using app::GamepadAxis;
@@ -240,16 +234,23 @@ public:
         m_jump = input.addAction("jump", {*Binding::key("Space"), Binding::gamepad(GamepadButton::South)});
         m_walk = input.addAction("walk", {*Binding::key("Left Shift")});
         m_call = input.addAction("call", {*Binding::key("E"), Binding::gamepad(GamepadButton::West)});
+        m_pause = input.addAction("pause", {*Binding::key("Escape"), Binding::gamepad(GamepadButton::Start)});
+        m_confirm = input.addAction("confirm", {*Binding::key("Return"), *Binding::key("Space")});
         return {};
     }
 
     void fixedStep(App& app, double dt) override {
+        if (m_screen != Screen::Playing) {
+            m_previous = m_current;
+            return;
+        }
         const app::Input& input = app.input();
         PlayerInput in;
-        in.move = glm::vec2(input.axis(m_left, m_right), input.axis(m_back, m_forward)) + m_scriptMove;
+        in.move =
+            glm::vec2(input.axis(m_left, m_right), input.axis(m_back, m_forward)) + m_scriptMove + m_touchState.move;
         if (const float l = glm::length(in.move); l > 1.0f) in.move /= l;
         in.walk = input.down(m_walk);
-        in.jumpHeld = input.down(m_jump) || m_scriptJump;
+        in.jumpHeld = input.down(m_jump) || m_scriptJump || m_touchState.jump;
         in.jumpPressed = in.jumpHeld && !m_jumpWasDown;
         m_jumpWasDown = in.jumpHeld;
         in.cameraYaw = m_camera.yaw;
@@ -271,9 +272,11 @@ public:
         if (m_player.flapped()) m_sound.flap();
         if (m_player.jumped()) m_sound.jump();
         if (m_player.landed()) m_sound.land(m_world.groundAt(feet), fall);
-        const bool called = (input.down(m_call) || m_scriptCall) && !m_callWasDown && m_ending < 0.0f;
+        const bool called =
+            (((input.down(m_call) || m_scriptCall) && !m_callWasDown) || m_touchCall) && m_ending < 0.0f;
         m_callWasDown = input.down(m_call) || m_scriptCall;
         m_scriptCall = false;
+        m_touchCall = false;
         if (called) {
             m_callAge = 0.0f;
             m_sound.call();
@@ -310,14 +313,18 @@ public:
         const float dt = float(frameDt);
         m_time += dt;
         const app::Input& input = app.input();
-        // Camera input: drag with a mouse button, the right stick, the look keys.
+        updateScreen(app, dt);
+        // Camera input: drag with a mouse button or a finger, the right stick, the look keys.
         glm::vec2 look(input.axis(m_lookLeft, m_lookRight), -input.axis(m_lookDown, m_lookUp));
         look *= 2.2f * dt;
         if (!input.uiCapturesMouse() && !input.mouseFromTouch() &&
             (input.mouseDown(app::MouseButton::Left) || input.mouseDown(app::MouseButton::Right)))
             look += input.mouseDelta() * 0.005f;
+        look += m_touchState.look * 0.006f;
         look.x = -look.x;
-        if (m_scriptCamera) look = glm::vec2(0.0f);
+        look *= m_settings.lookSpeed;
+        if (m_settings.invertLook) look.y = -look.y;
+        if (m_scriptCamera || m_screen != Screen::Playing) look = glm::vec2(0.0f);
 
         const glm::vec3 feet = glm::mix(m_previous, m_current, float(app.alpha()));
         if (m_ending >= 0.0f) {
@@ -348,7 +355,7 @@ public:
         m_scene->setTransform(m_figureInstance, m_figure.transform());
         m_scene->setJointPalette(m_figureInstance, m_figure.palette());
         if (m_figure.stepped()) m_sound.footstep(m_world.groundAt(feet - glm::vec3(0.0f, kAltitude, 0.0f)), pose.speed);
-        if (m_ending >= 0.0f) m_ending += dt;
+        if (m_ending >= 0.0f && m_screen == Screen::Playing) m_ending += dt;
         m_spirits.update(
             dt, {.feet = feet, .yaw = m_player.yaw(), .grounded = m_player.grounded(), .airTime = m_player.airTime()},
             *m_scene, *m_physics);
@@ -445,7 +452,32 @@ public:
     }
 
     void ui(App& app) override {
-        (void)app;
+        const bool canQuit = !app.mobile();
+        MenuAction action = MenuAction::None;
+        if (m_screen == Screen::Title) {
+            action = m_menus.title(m_settings, 1.0f, canQuit);
+        } else if (m_screen == Screen::Paused) {
+            action = m_menus.pause(m_settings, canQuit);
+        } else {
+            const float since = m_time - m_begunAt;
+            const float fade = smoothstep(1.5f, 2.5f, since) * (1.0f - smoothstep(10.0f, 11.5f, since)) +
+                               smoothstep(12.5f, 13.5f, since) * (1.0f - smoothstep(22.0f, 24.0f, since));
+            if (fade > 0.0f && m_ending < 0.0f) m_menus.hint(controlsHint(app), fade);
+            if (m_touchUi && m_ending < 0.0f) m_touch.draw(1.0f);
+        }
+        if (m_screen != Screen::Title && m_beginFade < 1.0f) m_menus.title(m_settings, 1.0f - m_beginFade, canQuit);
+        switch (action) {
+        case MenuAction::Begin: begin(); break;
+        case MenuAction::Resume: m_screen = Screen::Playing; break;
+        case MenuAction::Quit: app.quit(); break;
+        case MenuAction::SettingsChanged:
+            applySettings(app);
+            if (!app.scripted())
+                if (Result<void> saved = fs::writeUserText("settings.json", writeSettings(m_settings)); !saved)
+                    log::warning("game", "settings not saved: {}", saved.error());
+            break;
+        case MenuAction::None: break;
+        }
         if (m_ending >= 6.0f) endingCard();
         if (!m_debugUi) return;
         ImGui::SetNextWindowPos(ImVec2(12.0f, 12.0f), ImGuiCond_FirstUseEver);
@@ -503,6 +535,9 @@ public:
         if (name == "walking") return m_spirits.walking();
         if (name == "nav_ready") return m_spirits.navReady() ? 1.0 : 0.0;
         if (name == "ending") return m_ending;
+        if (name == "screen") return double(int(m_screen));
+        if (name == "quality") return double(int(m_settings.quality));
+        if (name == "render_scale") return m_renderer->settings().renderScale;
         if (name == "updraft") return updraftOpen() ? 1.0 : 0.0;
         if (name == "seated") return m_spirits.seated();
         if (name == "altar_dist") {
@@ -531,7 +566,6 @@ public:
     // behind the player). light I: candle I lit. aim X Z: the orbit's heading toward a local point. view EX EY EZ TX TY
     // TZ: a fixed camera (local points); view off: the orbit again. move X Y: hold the stick; jump down|up; call.
     app::ScenarioExec scenarioCommand(App& app, const app::ScenarioCommand& command) override {
-        (void)app;
         const auto& a = command.args;
         auto f = [&](std::size_t i) { return parseFloat(a[i]); };
         if (command.op == "teleport" && a.size() >= 3) {
@@ -600,6 +634,66 @@ public:
             m_renderer->setSettings(rs);
             return app::ScenarioExec::Done;
         }
+        if (command.op == "mood" && a.size() >= 2) {
+            // mood KEY VALUES: the light, the sky and the haze, for tuning by captures.
+            Mood& m = m_mood;
+            auto v3 = [&] { return a.size() >= 4 ? glm::vec3(f(1), f(2), f(3)) : glm::vec3(f(1)); };
+            const std::string_view key = a[0];
+            if (key == "sun" && a.size() >= 3)
+                m.sunElevation = f(1), m.sunAzimuth = f(2);
+            else if (key == "tint")
+                m.sunTint = v3();
+            else if (key == "scale")
+                m.sunScale = f(1);
+            else if (key == "atmosphere")
+                m.atmosphere = f(1);
+            else if (key == "zenith")
+                m.zenith = v3();
+            else if (key == "horizon")
+                m.horizon = v3();
+            else if (key == "glow")
+                m.glow = v3();
+            else if (key == "ambient_tint")
+                m.ambientTint = v3();
+            else if (key == "ambient")
+                m.ambient = f(1);
+            else if (key == "fog" && a.size() >= 3)
+                m.fogDensity = f(1), m.fogMax = f(2);
+            else if (key == "fog_color")
+                m.fogColor = v3();
+            else if (key == "exposure")
+                m.exposure = f(1);
+            else
+                return app::ScenarioExec::Unknown;
+            applyMood();
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "screen" && a.size() == 1) {
+            // screen title|play|pause|settings: the title, play, the pause menu (with its settings).
+            m_menus.openSettings(a[0] == "settings");
+            if (a[0] == "title") {
+                m_screen = Screen::Title;
+                m_beginFade = 0.0f;
+            } else if (a[0] == "play") {
+                if (m_screen == Screen::Title) begin();
+                m_screen = Screen::Playing;
+            } else if (a[0] == "pause" || a[0] == "settings") {
+                m_screen = Screen::Paused;
+            } else {
+                return app::ScenarioExec::Unknown;
+            }
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "touch_controls" && a.size() == 1) {
+            m_touchUi = a[0] == "on";
+            m_menus.setTouch(m_touchUi);
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "quality" && a.size() == 1) {
+            m_settings.quality = a[0] == "low" ? Quality::Low : a[0] == "medium" ? Quality::Medium : Quality::High;
+            applySettings(app);
+            return app::ScenarioExec::Done;
+        }
         if (command.op == "debug_ui" && a.size() == 1) {
             m_debugUi = a[0] == "on";
             return app::ScenarioExec::Done;
@@ -653,16 +747,178 @@ private:
         m_sound.candleLit(at);
         m_sound.spiritWakes(at);
     }
+    // The golden hour: a low warm sun, a pastel sky, a soft haze that pales the far isles.
+    void applyMood() {
+        const Mood& m = m_mood;
+        m_towardSun = render::skyDirection(m.sunElevation, m.sunAzimuth);
+        const render::Daylight day = render::daylightFor(m_towardSun);
+        m_scene->setLight(m_sun, {.type = render::LightType::Directional,
+                                  .color = day.sunColor * m.sunTint * m.sunScale,
+                                  .direction = -m_towardSun});
+        render::Environment env = day.environment;
+        env.atmosphere = m.atmosphere;
+        env.skyZenith *= m.zenith;
+        env.skyHorizon *= m.horizon;
+        env.sunGlow *= m.glow;
+        env.sunDisc *= m.glow;
+        env.skyAmbient = glm::mix(env.skyAmbient, m.ambientTint, 0.5f) * m.ambient;
+        env.groundAmbient = glm::vec3(0.55f, 0.48f, 0.42f);
+        env.skyGround = glm::vec3(1.05f, 0.95f, 0.92f);
+        env.fogDensity = m.fogDensity;
+        env.fogFalloff = 0.0009f;
+        env.fogBaseHeight = kAltitude;
+        env.fogMaxAmount = m.fogMax;
+        env.fogSunScatter = 0.8f;
+        env.fogColor = m.fogColor;
+        env.exposure = m.exposure;
+        m_scene->setEnvironment(env);
+    }
     bool updraftOpen() const { return m_journey.candlesLit() == m_world.landmarks().candles.size(); }
-    glm::vec3 eye() const {
-        return m_scriptCamera ? m_scriptCamera->first : m_endView ? m_endView->first : m_camera.eye();
+    // The title's view: low behind the figure on the meadow, past it toward the temple's beam, drifting slowly.
+    std::pair<glm::vec3, glm::vec3> titleView() const {
+        const Landmarks& l = m_world.landmarks();
+        const glm::vec3 feet = l.start + glm::vec3(0.0f, kAltitude, 0.0f);
+        const glm::vec3 ahead(std::sin(l.startYaw), 0.0f, std::cos(l.startYaw));
+        const glm::vec3 side(ahead.z, 0.0f, -ahead.x);
+        const float drift = std::sin(m_time * 0.05f);
+        return {feet - ahead * 4.4f + side * (1.7f + 0.9f * drift) + glm::vec3(0.0f, 0.9f + 0.15f * drift, 0.0f),
+                feet + ahead * 40.0f + glm::vec3(0.0f, 8.0f, 0.0f)};
     }
+    std::pair<glm::vec3, glm::vec3> currentView() const {
+        if (m_scriptCamera) return *m_scriptCamera;
+        if (m_endView) return *m_endView;
+        if (m_screen == Screen::Title) return titleView();
+        const std::pair<glm::vec3, glm::vec3> rig(m_camera.eye(), m_camera.pivot());
+        if (m_beginFade >= 1.0f) return rig;
+        const std::pair<glm::vec3, glm::vec3> title = titleView();
+        const float k = smoothstep(0.0f, 1.0f, m_beginFade);
+        return {glm::mix(title.first, rig.first, k), glm::mix(title.second, rig.second, k)};
+    }
+    glm::vec3 eye() const { return currentView().first; }
     glm::mat4 viewMatrix() const {
-        if (m_scriptCamera)
-            return glm::lookAt(m_scriptCamera->first, m_scriptCamera->second, glm::vec3(0.0f, 1.0f, 0.0f));
-        if (m_endView) return glm::lookAt(m_endView->first, m_endView->second, glm::vec3(0.0f, 1.0f, 0.0f));
-        return m_camera.view();
+        const std::pair<glm::vec3, glm::vec3> v = currentView();
+        return glm::lookAt(v.first, v.second, glm::vec3(0.0f, 1.0f, 0.0f));
     }
+
+    void begin() {
+        if (m_screen != Screen::Title) return;
+        m_screen = Screen::Playing;
+        m_menus.openSettings(false);
+        m_begunAt = m_time;
+        m_beginFade = 0.0f;
+        m_jumpWasDown = true; // the Space that began is not a jump
+    }
+
+    // Pause and resume, the touch controls, the title's fade.
+    void updateScreen(App& app, float dt) {
+        const app::Input& input = app.input();
+        if (m_touchUi && m_screen == Screen::Playing && m_ending < 0.0f) {
+            const ImVec2 size = ImGui::GetIO().DisplaySize;
+            const app::WindowRect safe = app.safeArea();
+            m_touchState =
+                m_touch.update(input, glm::vec2(size.x, size.y),
+                               glm::vec4(float(safe.x), float(safe.y), float(safe.width), float(safe.height)));
+            if (m_touchState.call) m_touchCall = true;
+        } else {
+            m_touchState = TouchState{};
+            m_touch.reset();
+        }
+        const bool pause = input.pressed(m_pause) || m_touchState.pause;
+        if (m_screen == Screen::Playing && pause) {
+            m_screen = Screen::Paused;
+            m_menus.openSettings(false);
+            m_touchState = TouchState{};
+            m_touch.reset();
+        } else if (m_screen == Screen::Paused && pause) {
+            if (m_menus.settingsOpen())
+                m_menus.openSettings(false);
+            else
+                m_screen = Screen::Playing;
+        } else if (m_screen == Screen::Title && !m_menus.settingsOpen() && input.pressed(m_confirm)) {
+            begin();
+        }
+        if (m_screen != Screen::Title) m_beginFade = std::min(1.0f, m_beginFade + dt / 1.6f);
+        // Phones grow hot: the thermal governor's limits go to the renderer, never into the player's settings.
+        if (app.mobile()) {
+            render::RenderSettings rs = m_playerRender;
+            const app::ThermalGovernor& heat = app.thermalGovernor();
+            rs.renderScale = std::max(heat.renderScale(rs.renderScale), 0.25f);
+            if (heat.reduceEffects()) rs.clouds = render::Clouds::Layer;
+            const render::RenderSettings& now = m_renderer->settings();
+            if (rs.renderScale != now.renderScale || rs.clouds != now.clouds) m_renderer->setSettings(rs);
+        }
+    }
+
+    const char* controlsHint(const App& app) const {
+        const float since = m_time - m_begunAt;
+        if (since > 12.0f) return "Gather the drifting lights, and call beside the cold candles.";
+        if (m_touchUi)
+            return "Left thumb to walk, right thumb to look, the arrow to jump (hold to glide), the rings to call";
+        if (app.input().gamepadConnected())
+            return "Left stick to walk, A to jump (hold to glide), X to call, right stick to look";
+        return "WASD to walk, Space to jump (hold to glide), E to call, drag the mouse to look, Esc to rest";
+    }
+
+    // The quality's render settings and the volumes.
+    void applySettings(App& app) {
+        (void)app;
+        render::RenderSettings rs = m_renderer->settings();
+        rs.cloudShadows = false;
+        rs.bloom = true;
+        rs.bloomStrength = 0.09f;
+        rs.bloomThreshold = 1.3f;
+        rs.toneCurve = render::ToneCurve::Agx;
+        rs.vignette = 0.22f;
+        switch (m_settings.quality) {
+        case Quality::High:
+            rs.renderScale = 1.0f;
+            rs.clouds = render::Clouds::Volumetric;
+            rs.cloudResolution = 0.5f;
+            rs.cloudSteps = 64;
+            rs.shadowCascades = 3;
+            rs.shadowMapSize = 2048;
+            rs.shadowDistance = 90.0f;
+            rs.shadowFilter = 2;
+            rs.reflections = render::Reflections::ScreenSpace;
+            break;
+        case Quality::Medium:
+            rs.renderScale = 0.85f;
+            rs.clouds = render::Clouds::Volumetric;
+            rs.cloudResolution = 0.35f;
+            rs.cloudSteps = 40;
+            rs.shadowCascades = 3;
+            rs.shadowMapSize = 1536;
+            rs.shadowDistance = 70.0f;
+            rs.shadowFilter = 1;
+            rs.reflections = render::Reflections::Sky;
+            break;
+        case Quality::Low:
+            rs.renderScale = 0.7f;
+            rs.clouds = render::Clouds::Layer;
+            rs.shadowCascades = 2;
+            rs.shadowMapSize = 1024;
+            rs.shadowDistance = 50.0f;
+            rs.shadowFilter = 1;
+            rs.reflections = render::Reflections::Sky;
+            break;
+        }
+        m_playerRender = rs;
+        m_renderer->setSettings(rs);
+        m_sound.setVolumes(m_settings.music, m_settings.effects);
+    }
+
+    struct Mood {
+        float sunElevation = 10.0f, sunAzimuth = 135.0f; // degrees: ahead and to the right on the way to the temple
+        glm::vec3 sunTint{1.3f, 1.0f, 0.75f};
+        float sunScale = 1.15f;
+        float atmosphere = 1.0f;
+        glm::vec3 zenith{0.9f, 0.92f, 1.0f}, horizon{1.2f, 0.95f, 0.85f}, glow{1.6f, 1.25f, 0.9f}; // daylight tints
+        glm::vec3 ambientTint{0.6f, 0.62f, 0.82f}; // a cool fill against the warm sun
+        float ambient = 1.4f;
+        float fogDensity = 0.0007f, fogMax = 0.85f;
+        glm::vec3 fogColor{0.92f, 0.8f, 0.78f};
+        float exposure = 1.08f;
+    };
 
     std::optional<render::Renderer> m_renderer;
     std::optional<render::Scene> m_scene;
@@ -673,6 +929,7 @@ private:
     render::SurfaceId m_worldSurface;
     render::LightId m_sun;
     glm::vec3 m_towardSun{0.0f, 1.0f, 0.0f};
+    Mood m_mood;
 
     Player m_player;
     glm::vec3 m_previous{0.0f}, m_current{0.0f};
@@ -691,7 +948,17 @@ private:
 
     app::ActionId m_left = 0, m_right = 0, m_forward = 0, m_back = 0;
     app::ActionId m_lookLeft = 0, m_lookRight = 0, m_lookUp = 0, m_lookDown = 0;
-    app::ActionId m_jump = 0, m_walk = 0, m_call = 0;
+    app::ActionId m_jump = 0, m_walk = 0, m_call = 0, m_pause = 0, m_confirm = 0;
+    enum class Screen { Title, Playing, Paused };
+    Screen m_screen = Screen::Playing;
+    Settings m_settings;
+    render::RenderSettings m_playerRender;
+    Menus m_menus;
+    TouchControls m_touch;
+    TouchState m_touchState;
+    bool m_touchUi = false, m_touchCall = false;
+    float m_begunAt = -100.0f; // m_time when the player began
+    float m_beginFade = 1.0f;  // 0..1 from the title's view to the player's
     bool m_jumpWasDown = false, m_callWasDown = false, m_scriptCall = false;
     float m_callAge = 100.0f;
     glm::vec3 m_callCentre{0.0f};

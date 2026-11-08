@@ -1,0 +1,50 @@
+# The title, the settings, the start, resting (the pause menu) and the touch controls under scripted fingers
+# (ctest `front`). Scripted runs start playing; `screen` shows the title or the menus as a player would see them.
+#   cloudsong --script scenarios/front.txt
+
+screen title
+wait 0.5
+expect screen == 0
+# Space begins from the title.
+tap Space
+wait 0.1
+expect screen == 1
+wait 1.0
+
+# Escape rests and resumes; resting holds the player still.
+tap Escape
+wait 0.1
+expect screen == 2
+mark z
+down W
+wait 0.4
+up W
+expect d_z < 0.01
+tap Escape
+wait 0.1
+expect screen == 1
+
+# The quality's render settings.
+quality low
+expect render_scale < 0.71
+quality high
+expect render_scale > 0.99
+
+# Touch: a thumb dragged up on the left walks forward, the arrow jumps, the pause button rests.
+touch_controls on
+wait 0.2
+mark z
+touch 15% 80% 0 -70 70
+wait 0.1
+expect d_z > 1.0
+wait 0.5
+mark y
+touch 1194 628
+wait 0.25
+expect d_y > 0.4
+wait 1.2
+expect grounded == 1
+touch 1246 34
+wait 0.1
+expect screen == 2
+quit

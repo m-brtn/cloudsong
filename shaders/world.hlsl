@@ -61,14 +61,20 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         const float n = csNoise(p.xz + p.y * 0.7) * 0.55 + csNoise(p.xy * 2.3 + p.z) * 0.45;
         s.albedo *= lerp(0.75, 1.15, n);
         if (i.front) {
-            const float moss = smoothstep(0.25, 0.65, i.normal.y + (n - 0.5) * 0.6);
-            s.albedo = lerp(s.albedo, float3(0.2, 0.32, 0.1), moss * 0.9);
+            // Rock in strata on the steep sides, moss on the back.
+            const float strata = csNoise(float2((i.world.x + i.world.z) * 0.1, i.world.y * 1.3)) * 0.6 +
+                                 csNoise(float2(i.world.x - i.world.z, i.world.y * 4.0) * 0.5) * 0.4;
+            s.albedo *= lerp(0.72, 1.18, strata);
+            const float moss = smoothstep(0.45, 0.8, i.normal.y + (n - 0.5) * 0.5);
+            s.albedo = lerp(s.albedo, float3(0.24, 0.34, 0.12), moss * 0.9);
             s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
         } else {
             const float moss = smoothstep(0.35, 0.7, n + 0.25 * csNoise(i.world.xz * 0.5));
             s.albedo = lerp(s.albedo * float3(0.75, 0.85, 0.8), float3(0.12, 0.26, 0.14), moss * 0.8);
             s.occlusion = 0.3;
             s.roughness = lerp(0.9, 0.55, moss);
+            // The moss gives back a little green light of its own.
+            s.emissive += float3(0.015, 0.05, 0.025) * moss;
         }
     } else {
         // A figure. The cape (uv.x from 2): its inside darker, a band of diamond marks that glow with the energy and

@@ -1,0 +1,26 @@
+# The key views at fixed frames for the golden images (ctest `captures`, then `golden_<view>` compares each with
+# tests/golden/metal/<view>.png). Spirits are left out: their navmesh is built on worker threads, so the frame it is
+# ready on (and all that follows) varies between runs.
+#   cloudsong --window 480x270 --frame-size 480x270 --user-dir /tmp/cloudsong --script scenarios/captures.txt
+wait 2.5
+capture golden/meadow.png
+teleport -28 8 22 -0.35
+camera -0.35 0.22 5.6
+wait 1.5
+capture golden/edge.png
+view 15 13 4 8 30 205
+wait 0.5
+capture golden/isles.png
+view 30 70 190 10 66 218
+wait 0.5
+capture golden/temple.png
+view 57.5 4.6 56.6 67 3.5 66
+wait 0.5
+capture golden/cave.png
+view off
+teleport 2 0.8 -36 0
+wait 0.5
+screen title
+wait 1.5
+capture golden/title.png
+quit

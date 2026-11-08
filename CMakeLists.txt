@@ -34,7 +34,7 @@ quench_add_game(cloudsong
     ASSETS assets
     COOKED_ASSETS cloudsong_weather_sounds
     ORIENTATIONS landscape
-    SOURCES src/Game.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Journey.cpp src/Player.cpp
+    SOURCES src/Game.cpp src/Front.cpp src/Settings.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Journey.cpp src/Player.cpp
         src/Spirits.cpp src/Sound.cpp)
 target_include_directories(cloudsong PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -49,9 +49,27 @@ quench_add_shaders(cloudsong NAME glow SOURCE shaders/glow.hlsl ENTRIES glow_vs:
 
 if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
-    add_test(NAME smoke COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/smoke.txt)
-    add_test(NAME flight COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/flight.txt)
-    add_test(NAME journey COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/journey.txt)
-    add_test(NAME sound COMMAND cloudsong --window 640x360 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/sound.txt)
-    set_tests_properties(smoke flight journey sound PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
+    # Scripted offscreen runs; their captures and user files go to the build's captures/, never to the player's.
+    set(capture_dir ${CMAKE_CURRENT_BINARY_DIR}/captures)
+    foreach(check smoke flight journey sound)
+        add_test(NAME ${check} COMMAND cloudsong --window 640x360 --user-dir ${capture_dir}
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/${check}.txt)
+    endforeach()
+    # The touch controls' places are in window points: a 1280x720 window.
+    add_test(NAME front COMMAND cloudsong --window 1280x720 --frame-size 640x360 --user-dir ${capture_dir}
+             --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/front.txt)
+    set_tests_properties(smoke flight journey sound front PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
+
+    # Golden images: the key views at fixed frames, compared with tests/golden/metal/ (the default backend on Apple
+    # platforms, native Metal, on the M4 Pro Mac) by the engine's image compare tool.
+    add_test(NAME captures COMMAND cloudsong --window 480x270 --frame-size 480x270 --user-dir ${capture_dir}
+             --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/captures.txt)
+    set_tests_properties(captures PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line" FIXTURES_SETUP golden_captures)
+    add_executable(cloudsong_image_compare ${quench_SOURCE_DIR}/tools/imagecompare/ImageCompare.cpp)
+    target_link_libraries(cloudsong_image_compare PRIVATE SDL3::SDL3-static)
+    foreach(view meadow edge isles temple cave title)
+        add_test(NAME golden_${view} COMMAND cloudsong_image_compare ${capture_dir}/golden/${view}.png
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/golden/metal/${view}.png --diff ${capture_dir}/golden/${view}_diff.png)
+        set_tests_properties(golden_${view} PROPERTIES FIXTURES_REQUIRED golden_captures)
+    endforeach()
 endif()

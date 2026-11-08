@@ -159,8 +159,8 @@ public:
             m_delayL[at] = r * 0.5f + er * 0.38f;
             m_delayR[at] = l * 0.5f + el * 0.38f;
             m_delayAt = (m_delayAt + 1) % kDelayFrames;
-            out[2 * n] = std::tanh(l + el * 0.4f);
-            out[2 * n + 1] = std::tanh(r + er * 0.4f);
+            out[2 * n] = std::tanh(kScoreGain * (l + el * 0.4f));
+            out[2 * n + 1] = std::tanh(kScoreGain * (r + er * 0.4f));
         }
         return frames;
     }
@@ -169,6 +169,7 @@ private:
     struct Voice {
         float hz = 0.0f, phase = 0.0f, age = 0.0f, amp = 0.0f, pan = 0.0f;
     };
+    static constexpr float kScoreGain = 1.8f;
     static constexpr float kChordSeconds = 8.0f;
     static constexpr float kEighth = 60.0f / 72.0f / 2.0f;
     static constexpr std::size_t kDelayFrames = std::size_t(kRate * 0.625f);

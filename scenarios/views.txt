@@ -1,27 +1,45 @@
-# The key views, captured for looking at (not checked against golden images):
+# The key views, captured for looking at (not checked against golden images; tests/golden/ has those):
 #   build/release/cloudsong --frame-size 1920x1080 --user-dir /tmp/cloudsong --script scenarios/views.txt
 # Captures go to the user directory's views/.
-wait 2.5
-capture views/start.png
+until nav_ready == 1 10
+wait 2.0
+capture views/meadow.png
 camera 3.14 0.05 2.6
 wait 0.5
 capture views/closeup.png
+
+# A spirit woken by the pond follows.
+teleport -17.5 1 -12.5 2.4
+camera 2.4 0.2 5.6
+light 0
+wait 2.5
+aim -6 -27
+move 0 1
+wait 1.6
+move 0 0
+wait 0.8
+orbit 2.6 0.18 6.5
+wait 0.6
+capture views/spirit.png
+
+# Over the edge, then gliding over the clouds.
 teleport -28 8 22 -0.35
 camera -0.35 0.22 5.6
 wait 1.5
 capture views/edge.png
+teleport -40 30 70 -0.5
+camera -0.5 0.2 6
+jump down
+wait 1.6
+capture views/glide.png
+jump up
+
 view 15 13 4 8 30 205
 wait 0.5
-capture views/hill.png
+capture views/isles.png
 view 0 40 -70 0 -160 -700
 wait 0.5
 capture views/clouds.png
-view -40 95 120 10 60 218
-wait 0.5
-capture views/temple.png
-view 30 70 190 10 66 218
-wait 0.5
-capture views/temple_top.png
 view 46 8 45 59 3.5 58.5
 wait 0.5
 capture views/cave.png
@@ -31,4 +49,24 @@ capture views/cave_inside.png
 view -4 3.5 -2 -18 0.8 -13
 wait 0.5
 capture views/pond.png
+view off
+
+# The end: every candle lit, the spirits gather at the altar.
+light 1
+light 2
+teleport 10 66 207 0
+until spirit_far < 6 60
+aim 10 218
+move 0 1
+until ending >= 0 15
+move 0 0
+until ending > 13 30
+capture views/end.png
+
+# The title.
+view off
+teleport 2 0.8 -36 0
+screen title
+wait 2.0
+capture views/title.png
 quit

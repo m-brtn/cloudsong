@@ -24,6 +24,27 @@ then `ios-sim-release` (Simulator, ad-hoc signed) or `ios-xcode` (device, Xcode 
 Gates before a commit: build `debug` and `release`, `ctest` for both, take a capture and look at it (do not assume).
 Changes that can behave differently on a phone: run on the device, or ask the user to, and log their report.
 
+The checks (`ctest`, all offscreen, their files in `build/<preset>/captures/`): `smoke` (keys move and jump), `flight`
+(glide and flap between isles), `journey` (the whole way, candles, spirits on the navmesh, the updraft, the end),
+`sound` (the mix measured: levels, the call's pitch, footsteps, no clipping), `front` (the title, resting, the
+quality, the touch controls under scripted fingers), `captures` and `golden_<view>` (six views at fixed frames
+compared with `tests/golden/metal/`, captured on the default backend, native Metal, on the M4 Pro Mac). A golden image
+changes only with an intended change of the look: look at both, copy `build/release/captures/golden/<view>.png`
+over it, and write the reason in the devlog. Spirits are not in the golden views: their navmesh is built on worker
+threads, so the frame it is ready on varies. `scenarios/views.txt` captures the showcase views at any size.
+
+Game scenario commands (besides the engine's): `teleport X Y Z [YAW]`, `camera YAW PITCH DIST`, `orbit DYAW PITCH
+DIST`, `aim X Z`, `view EX EY EZ TX TY TZ` / `view off`, `move X Y`, `jump down|up`, `call`, `light I`, `clouds
+layer|off|volumetric`, `quality low|medium|high`, `screen title|play|pause|settings`, `touch_controls on|off`,
+`mood KEY VALUES` (the light, sky and haze, for tuning), `debug_ui on|off`. Values: `x y z grounded glide energy
+max_energy lights candles warm awake walking seated nav_ready updraft ending screen quality render_scale altar_dist
+candle_dist spirit_far vx vy cape_up cape_back glow_draws`. Coordinates are local: the isles float at
+`kAltitude` (2200 m).
+
+Packages: `tools/package.sh` (Release, ctest, `dist/Cloudsong-<version>-<hash>-macos.zip`, a smoke run from the
+unzipped app); `--ios` also builds the iOS app signed by a paid team (`--team ID` or `QUENCH_IOS_TEAM`, never written
+into files) into `dist/`; installing it on a phone is a separate step, only when the user asks.
+
 ## Engine
 
 - How to build a game on the engine (modules, assets, scenarios, captures, iOS, pitfalls): the agent skill in

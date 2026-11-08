@@ -36,6 +36,8 @@ struct IsleDesc {
     std::uint32_t seed;
     std::vector<Bump> bumps;
     float flowers = 1.0f; // 0..: density of the flower fields
+    // Ground levelled down to a height (x, z the centre, z its radius, w the height), sloping back over 2 m.
+    std::vector<glm::vec4> levels = {};
 };
 
 struct Isle {
