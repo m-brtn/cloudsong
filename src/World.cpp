@@ -382,7 +382,7 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                     if (isle.slope(p) > 0.85f) continue;
                     const glm::vec3 base = isle.grassColor(p) * shade(p);
                     const float meadow = fbm(p / 9.0f, 2, d.seed + 29) * 0.5f + 0.5f;
-                    const float tall = glm::mix(0.12f, 0.32f, smoothstep(0.2f, 0.8f, meadow)) *
+                    const float tall = glm::mix(0.09f, 0.24f, smoothstep(0.2f, 0.8f, meadow)) *
                                        (1.0f - 0.5f * smoothstep(0.8f, 0.93f, t)) * glm::mix(0.3f, 1.0f, shade(p));
                     const glm::vec3 root(p.x - origin.x, *h - origin.y, p.y - origin.z);
                     const int blades = 5;
@@ -421,7 +421,7 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                     }
                     // Flowers in the flower fields.
                     const float field = fbm(p / 7.0f, 2, d.seed + 31) * 0.5f + 0.5f;
-                    if (random.uniform() < d.flowers * (0.03f + 0.3f * smoothstep(0.45f, 0.7f, field))) {
+                    if (random.uniform() < d.flowers * (0.06f + 0.42f * smoothstep(0.4f, 0.7f, field))) {
                         const glm::vec3 color = petals[std::size_t(random.range(int(petals.size())))];
                         const float height = tall * random.uniform(1.0f, 1.5f) + 0.05f;
                         const float size = random.uniform(0.035f, 0.06f);

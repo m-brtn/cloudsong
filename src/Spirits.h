@@ -50,6 +50,8 @@ public:
     glm::vec3 position(int spirit) const { return m_spirits[std::size_t(spirit)].feet; }
     glm::vec3 color(int spirit) const { return m_spirits[std::size_t(spirit)].look.cape; }
     float glow(int spirit) const; // 0 asleep .. 1 awake
+    const Character& figure(int spirit) const { return m_spirits[std::size_t(spirit)].figure; }
+    static constexpr int kMarks = 3; // on every spirit's cape, lit as it wakes
     bool navReady() const { return m_mesh && m_mesh->ready(); }
     int walking() const;
     int seated() const; // gathered and sitting at the altar

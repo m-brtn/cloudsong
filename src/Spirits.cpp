@@ -15,7 +15,6 @@ const glm::vec3 kAlt(0.0f, kAltitude, 0.0f);
 
 constexpr float kWakeSeconds = 1.8f;
 constexpr float kFlySpeed = 11.0f;
-constexpr int kMarks = 3;
 
 const nav::AgentParams kAgent{.radius = 0.3f,
                               .height = 1.0f,
@@ -41,7 +40,7 @@ Result<void> Spirits::create(render::Scene& scene, render::SurfaceId surface, co
         Spirit s;
         s.look.cape = capes[i % 3];
         s.look.capeInner = inners[i % 3];
-        s.look.hood = s.look.cape * 0.85f;
+        s.look.hood = glm::mix(srgb(226, 214, 196), s.look.cape, 0.3f);
         s.look.scale = 0.78f;
         s.look.capeLength = 0.9f;
         s.look.longHood = i != 1;
@@ -156,7 +155,11 @@ void Spirits::update(float dt, const SpiritTarget& target, render::Scene& scene,
     auto fly = [&](Spirit& s, glm::vec3 goal, float speed) {
         const glm::vec3 to = goal - s.feet;
         const float d = glm::length(to);
-        const glm::vec3 want = d > 0.01f ? to / d * std::min(d * 1.6f, speed) : glm::vec3(0.0f);
+        glm::vec3 want = d > 0.01f ? to / d * std::min(d * 1.6f, speed) : glm::vec3(0.0f);
+        // Over what stands in the way: climbing while rock lies within a few metres toward the goal.
+        const glm::vec3 eye = s.feet + glm::vec3(0.0f, 0.5f, 0.0f);
+        if (d > 0.8f && castRay(physics, eye, eye + to / d * std::min(d, 6.0f)))
+            want = glm::vec3(want.x * 0.3f, std::max(want.y, speed * 0.7f), want.z * 0.3f);
         s.velocity = approach(s.velocity, want, 0.3f, dt);
         s.feet += s.velocity * dt;
         // Over the ground, never through it.

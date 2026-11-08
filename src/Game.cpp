@@ -40,6 +40,8 @@ using namespace quench;
 using namespace cloudsong;
 using app::App;
 
+constexpr float kPivot = 0.75f; // the height on the figure the camera looks at
+
 float parseFloat(std::string_view s, float fallback = 0.0f) {
     const std::string text(s);
     char* end = nullptr;
@@ -51,13 +53,13 @@ float parseFloat(std::string_view s, float fallback = 0.0f) {
 // heading when left alone, pulled in by what stands between it and the player.
 class CameraRig {
 public:
-    float yaw = 0.0f;    // heading the camera looks along (0: +z)
-    float pitch = 0.26f; // down (radians)
-    float distance = 5.6f;
+    float yaw = 0.0f;   // heading the camera looks along (0: +z)
+    float pitch = 0.2f; // down (radians)
+    float distance = 3.4f;
 
     void reset(glm::vec3 target, float heading) {
         yaw = heading;
-        pitch = 0.26f;
+        pitch = 0.2f;
         m_pivot = target;
         m_distance = distance;
         m_idle = 0.0f;
@@ -75,13 +77,13 @@ public:
             const float follow = glide > 0.3f ? 1.4f : 3.5f;
             yaw = wrapAngle(yaw +
                             wrapAngle(heading - yaw) * (1.0f - std::exp(-dt / follow)) * std::min(speed / 4.0f, 1.0f));
-            const float wantPitch = glide > 0.3f ? 0.24f : 0.26f;
+            const float wantPitch = 0.2f;
             pitch = approach(pitch, wantPitch, 2.5f, dt);
         }
         m_pivot.x = approach(m_pivot.x, target.x, 0.06f, dt);
         m_pivot.z = approach(m_pivot.z, target.z, 0.06f, dt);
         m_pivot.y = approach(m_pivot.y, target.y, glide > 0.3f ? 0.12f : 0.2f, dt);
-        const float want = distance * (1.0f + 0.45f * glide);
+        const float want = distance * (1.0f + 0.25f * glide);
         const glm::vec3 dir = direction();
         float reach = want;
         if (const std::optional<float> hit = castRay(physics, m_pivot, m_pivot - dir * (want + 0.3f)))
@@ -98,7 +100,7 @@ public:
 
 private:
     glm::vec3 m_pivot{0.0f};
-    float m_distance = 5.2f;
+    float m_distance = 3.4f;
     float m_idle = 0.0f;
 };
 
@@ -152,7 +154,7 @@ public:
             CharacterLook look;
             look.cape = srgb(214, 88, 70);
             look.capeInner = srgb(140, 46, 40);
-            look.hood = srgb(196, 78, 64);
+            look.capeLength = 0.92f;
             CharacterMesh mesh = Character::buildMesh(look);
             render::MeshDesc desc = mesh.mesh.desc("player");
             desc.skin = mesh.skin;
@@ -167,7 +169,7 @@ public:
             m_figureInstance =
                 m_scene->addInstance({.mesh = *id, .material = m_figureMaterial, .transform = m_figure.transform()});
         }
-        m_camera.reset(start + glm::vec3(0.0f, 1.1f, 0.0f), l.startYaw);
+        m_camera.reset(start + glm::vec3(0.0f, kPivot, 0.0f), l.startYaw);
         m_journey.reset(l);
         if (Result<void> spirits = m_spirits.create(*m_scene, *world, l, m_world.takeNavGeometry(), app.jobs());
             !spirits)
@@ -337,7 +339,7 @@ public:
             m_endView = std::pair(from, altar + glm::vec3(0.0f, glm::mix(1.2f, 4.0f, t), 0.0f));
         }
         if (!m_scriptCamera)
-            m_camera.update(dt, look, feet + glm::vec3(0.0f, 1.05f, 0.0f), m_player.velocity(), m_player.yaw(),
+            m_camera.update(dt, look, feet + glm::vec3(0.0f, kPivot, 0.0f), m_player.velocity(), m_player.yaw(),
                             m_player.glide(), *m_physics);
 
         // The figure.
@@ -414,11 +416,23 @@ public:
                          glm::vec3(l.updraftRadius, 10.0f, l.updraftRadius), 120, 0.05f, 2.0f,
                          glm::vec3(2.4f, 2.4f, 2.0f), 9.0f);
         }
-        // The spirits' soft glow.
+        // A small halo on each lit mark of a cape; the spirits' soft glow.
+        const auto marks = [&](const Character& figure, float energy, int count, float flash) {
+            for (int k = 0; k < std::min(count, int(kMarkUv.size())); ++k) {
+                const float lit = std::clamp(energy - float(k), 0.0f, 1.0f);
+                if (lit <= 0.0f) continue;
+                const auto [at, out] = figure.capeSurface(kMarkUv[std::size_t(k)]);
+                m_glow.sprite(at + out * 0.02f * figure.scale(), 0.085f * figure.scale(),
+                              glm::vec3(1.4f, 1.0f, 0.45f) * lit * (1.0f + 1.5f * flash), 0.3f);
+            }
+        };
+        marks(m_figure, m_player.energy, m_player.maxEnergy, m_flash);
         for (int i = 0; i < int(m_spirits.count()); ++i)
-            if (const float g = m_spirits.glow(i); g > 0.0f)
-                m_glow.sprite(m_spirits.position(i) + glm::vec3(0.0f, 0.62f, 0.0f), 0.75f,
+            if (const float g = m_spirits.glow(i); g > 0.0f) {
+                m_glow.sprite(m_spirits.position(i) + glm::vec3(0.0f, 0.5f, 0.0f), 0.75f,
                               (m_spirits.color(i) * 0.9f + glm::vec3(0.25f)) * g, 0.0f);
+                marks(m_spirits.figure(i), float(Spirits::kMarks) * g, Spirits::kMarks, 0.0f);
+            }
         for (const glm::vec3& shaft : l.caveShafts)
             m_glow.beam(shaft + alt + glm::vec3(-1.6f, 7.2f, 0.8f), 0.55f, shaft + alt, 0.95f,
                         glm::vec3(1.2f, 1.1f, 0.8f), 0.1f, 0.75f);
@@ -427,7 +441,7 @@ public:
         m_glow.motes(l.start + alt + glm::vec3(0.0f, 2.0f, 20.0f), glm::vec3(30.0f, 2.0f, 30.0f), 160, 0.03f, 1.0f,
                      glm::vec3(3.0f, 2.6f, 1.4f), 5.0f);
         // The drifting lights; a gathered one flies into the cape and fades.
-        const glm::vec3 chest = feet + glm::vec3(0.0f, 0.75f, 0.0f);
+        const glm::vec3 chest = feet + glm::vec3(0.0f, 0.55f, 0.0f);
         for (std::size_t i = 0; i < l.lights.size(); ++i) {
             const glm::vec3 light = l.lights[i];
             glm::vec3 p = light + alt + glm::vec3(0.0f, 0.12f * std::sin(m_time * 1.7f + light.x), 0.0f);
@@ -575,14 +589,14 @@ public:
             m_previous = m_current = p;
             m_figure.setPlacement(p, yaw);
             m_figure.resetCape();
-            m_camera.reset(p + glm::vec3(0.0f, 1.05f, 0.0f), yaw);
+            m_camera.reset(p + glm::vec3(0.0f, kPivot, 0.0f), yaw);
             m_cut = true;
             return app::ScenarioExec::Done;
         }
         if ((command.op == "camera" || command.op == "orbit") && a.size() >= 3) {
             const float yaw = command.op == "orbit" ? wrapAngle(m_player.yaw() + f(0)) : f(0);
             m_camera.distance = f(2);
-            m_camera.reset(m_current + glm::vec3(0.0f, 1.05f, 0.0f), yaw);
+            m_camera.reset(m_current + glm::vec3(0.0f, kPivot, 0.0f), yaw);
             m_camera.pitch = f(1);
             m_cut = true;
             return app::ScenarioExec::Done;

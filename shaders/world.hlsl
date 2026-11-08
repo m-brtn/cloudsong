@@ -77,31 +77,46 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
             s.emissive += float3(0.015, 0.05, 0.025) * moss;
         }
     } else {
-        // A figure. The cape (uv.x from 2): its inside darker, a band of diamond marks that glow with the energy and
-        // a gold hem.
+        // A figure. The cape (uv.x from 2): its inside darker, diamond marks down the back that glow with the energy
+        // (dim once spent), a dark hem under a thin gold line.
         const float dormant = saturate(i.custom.w);
         if (i.uv.x >= 1.5) {
             const float u = i.uv.x - 2.0;
             const float v = i.uv.y;
-            if (!i.front) s.albedo *= 0.55;
-            const float marks = max(i.custom.y, 1.0);
-            const float cell = (u - 0.18) / 0.64 * marks;
-            const float index = floor(cell);
-            const float2 local = float2(frac(cell) - 0.5, (v - 0.42) * marks * 1.9);
-            const float diamond = abs(local.x) + abs(local.y) * 0.75;
-            const float inBand = step(0.0, cell) * step(cell, marks);
-            const float shape = (1.0 - smoothstep(0.26, 0.31, diamond)) * inBand;
-            const float lit = saturate(i.custom.x - index);
-            const float3 gold = float3(1.0, 0.72, 0.32);
-            s.albedo = lerp(s.albedo, gold * 0.9, shape * 0.8);
-            const float hem = smoothstep(0.9, 0.93, v) * (1.0 - smoothstep(0.97, 0.99, v));
-            s.albedo = lerp(s.albedo, gold * 0.85, hem);
-            s.emissive += gold * shape * (lit * (3.5 + 6.0 * i.custom.z) * (1.0 - dormant)) * (i.front ? 1.0 : 0.3);
+            if (!i.front) s.albedo *= 0.5;
+            // The cape's size in metres at this height (Character.cpp's capeRest): u across its arc, v down.
+            const float flare = pow(v, 0.85);
+            const float across = lerp(4.6, 4.0, sqrt(v)) * lerp(0.0925, 0.29, flare);
+            const float down = 0.45;
+            // Character.h's kMarkUv, in the order the marks light.
+            static const float2 kMarks[8] = {float2(0.5, 0.2),   float2(0.5, 0.37), float2(0.5, 0.54),  float2(0.5, 0.71),
+                                      float2(0.36, 0.3),  float2(0.64, 0.3), float2(0.34, 0.52), float2(0.66, 0.52)};
+            const int count = int(clamp(i.custom.y, 0.0, 8.0) + 0.5);
+            float shape = 0.0;
+            float lit = 0.0;
+            for (int k = 0; k < 8; ++k) {
+                if (k >= count) break;
+                const float2 d = abs((float2(u, v) - kMarks[k]) * float2(across, down));
+                const float diamond = d.x / 0.03 + d.y / 0.042;
+                const float m = 1.0 - smoothstep(0.8, 1.0, diamond);
+                shape = max(shape, m);
+                lit = max(lit, m * saturate(i.custom.x - float(k)));
+            }
+            const float3 gold = float3(1.0, 0.76, 0.36);
+            s.albedo = lerp(s.albedo, lerp(s.albedo * 0.7 + gold * 0.15, gold, saturate(lit * 2.0)), shape * 0.9);
+            const float trim = smoothstep(0.885, 0.9, v);
+            const float seam = smoothstep(0.855, 0.865, v) * (1.0 - smoothstep(0.875, 0.885, v));
+            s.albedo = lerp(s.albedo, s.albedo * 0.32, trim);
+            s.albedo = lerp(s.albedo, gold * 0.8, seam);
+            s.emissive += gold * lit * (6.0 + 10.0 * i.custom.z) * (1.0 - dormant) * (i.front ? 1.0 : 0.25);
         }
         // Dormant: grey stone-like.
         const float grey = dot(s.albedo, float3(0.3, 0.55, 0.15));
         s.albedo = lerp(s.albedo, grey * float3(0.82, 0.84, 0.9), dormant * 0.85);
-        s.emissive += csRim(i, s.normal, 0.35) * lerp(s.albedo + 0.15, 0.25, dormant);
+        // A soft light round the edges that lifts the figures off the grass, strongest against the sun.
+        const float edge = pow(1.0 - saturate(dot(s.normal, i.view)), 2.5);
+        const float towardSun = saturate(dot(-i.view, quenchFrame.sunDir.xyz) * 0.5 + 0.5);
+        s.emissive += quenchFrame.sunColor.rgb * edge * (0.08 + 0.4 * towardSun) * lerp(s.albedo + 0.15, 0.25, dormant);
         s.roughness = 0.8;
     }
     return s;

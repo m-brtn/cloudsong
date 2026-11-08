@@ -13,6 +13,7 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace cloudsong {
@@ -20,12 +21,13 @@ namespace cloudsong {
 struct CharacterLook {
     glm::vec3 cape = srgb(226, 96, 70); // linear
     glm::vec3 capeInner = srgb(150, 50, 44);
-    glm::vec3 hood = srgb(200, 76, 62);
-    glm::vec3 body = srgb(236, 228, 212); // the tunic and the sleeves
-    glm::vec3 legs = srgb(64, 56, 70);
-    glm::vec3 face = srgb(252, 249, 244); // a pale mask
-    glm::vec3 boots = srgb(92, 62, 48);
-    float scale = 1.0f;      // 1: a child about 1.2 m tall with the hood
+    glm::vec3 hood = srgb(226, 214, 196);
+    glm::vec3 body = srgb(214, 198, 178); // the tunic and the sleeves
+    glm::vec3 legs = srgb(52, 46, 58);
+    glm::vec3 face = srgb(252, 249, 244); // a small pale mask
+    glm::vec3 shade = srgb(96, 78, 74);   // inside the hood, round the mask
+    glm::vec3 boots = srgb(70, 52, 46);
+    float scale = 1.0f;      // 1: a child about 1.05 m tall with the hood
     float capeLength = 1.0f; // relative
     bool longHood = true;    // the hood's tip falls back
 };
@@ -52,9 +54,20 @@ enum Joint : int {
     kBodyJoints
 };
 
-inline constexpr int kCapeCols = 5;
-inline constexpr int kCapeRows = 5;
+inline constexpr int kCapeCols = 7;
+inline constexpr int kCapeRows = 6;
 inline constexpr int kJointCount = kBodyJoints + kCapeCols * kCapeRows;
+
+// The marks on the cape's back, in the order they light: (across, down) in the cape's uv. shaders/world.hlsl draws
+// the same table.
+inline constexpr std::array<glm::vec2, 8> kMarkUv = {{{0.5f, 0.2f},
+                                                      {0.5f, 0.37f},
+                                                      {0.5f, 0.54f},
+                                                      {0.5f, 0.71f},
+                                                      {0.36f, 0.3f},
+                                                      {0.64f, 0.3f},
+                                                      {0.34f, 0.52f},
+                                                      {0.66f, 0.52f}}};
 
 struct CharacterMesh {
     MeshData mesh;
@@ -97,12 +110,14 @@ public:
     float scale() const { return m_look.scale; }
     // The middle of the collar and of the hem (world).
     glm::vec3 capePoint(int row) const { return m_cloth[std::size_t(row * kCapeCols + kCapeCols / 2)]; }
+    // A point on the cape's outside at uv (across, down), and its outward normal (world).
+    std::pair<glm::vec3, glm::vec3> capeSurface(glm::vec2 uv) const;
     // A foot came down in the last update (footsteps).
     bool stepped() const { return m_stepped; }
 
 private:
     void forward(const std::array<glm::quat, kBodyJoints>& local, glm::vec3 hipsOffset);
-    void simulateCape(float dt, glm::vec3 wind, float wings);
+    void simulateCape(float dt, glm::vec3 wind, float wings, float swing);
 
     CharacterLook m_look;
     std::array<glm::vec3, kJointCount> m_bind{}; // bind pose joint positions (model space)
@@ -124,6 +139,7 @@ private:
     std::array<glm::vec3, kCapeCols * kCapeRows> m_cloth{};
     std::array<glm::vec3, kCapeCols * kCapeRows> m_clothPrev{};
     std::array<glm::vec3, kCapeCols * kCapeRows> m_clothRest{}; // bind pose (model space)
+    std::array<glm::vec3, kCapeCols * kCapeRows> m_clothWing{}; // spread as wings (model space)
     float m_rowLength = 0.1f;
     std::array<float, kCapeRows> m_rowWidth{};
     bool m_clothValid = false;

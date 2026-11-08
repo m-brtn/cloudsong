@@ -8,27 +8,30 @@ namespace {
 
 using quench::render::SkinVertex;
 
-// The bind pose (model space, a figure 1.2 m tall with its hood, facing +z).
+// The bind pose (model space, a figure about 1.05 m tall with its hood, facing +z): a large round head on a short
+// body and thin legs.
 constexpr std::array<glm::vec3, kBodyJoints> kRest = {{
     {0.0f, 0.0f, 0.0f},       // root
-    {0.0f, 0.50f, 0.0f},      // hips
-    {0.0f, 0.62f, 0.0f},      // spine
-    {0.0f, 0.74f, 0.0f},      // chest
-    {0.0f, 0.86f, 0.0f},      // neck
-    {0.0f, 0.91f, 0.0f},      // head
-    {0.065f, 0.48f, 0.0f},    // left hip
-    {0.065f, 0.27f, 0.012f},  // left knee
-    {0.065f, 0.06f, 0.0f},    // left ankle
-    {-0.065f, 0.48f, 0.0f},   // right hip
-    {-0.065f, 0.27f, 0.012f}, // right knee
-    {-0.065f, 0.06f, 0.0f},   // right ankle
-    {0.115f, 0.81f, 0.0f},    // left shoulder
-    {0.135f, 0.655f, -0.01f}, // left elbow
-    {0.145f, 0.52f, 0.01f},   // left wrist
-    {-0.115f, 0.81f, 0.0f},   // right shoulder
-    {-0.135f, 0.655f, -0.01f},
-    {-0.145f, 0.52f, 0.01f},
+    {0.0f, 0.40f, 0.0f},      // hips
+    {0.0f, 0.48f, 0.0f},      // spine
+    {0.0f, 0.56f, 0.0f},      // chest
+    {0.0f, 0.64f, 0.0f},      // neck
+    {0.0f, 0.68f, 0.0f},      // head
+    {0.05f, 0.39f, 0.0f},     // left hip
+    {0.05f, 0.215f, 0.012f},  // left knee
+    {0.05f, 0.045f, 0.0f},    // left ankle
+    {-0.05f, 0.39f, 0.0f},    // right hip
+    {-0.05f, 0.215f, 0.012f}, // right knee
+    {-0.05f, 0.045f, 0.0f},   // right ankle
+    {0.085f, 0.615f, 0.0f},   // left shoulder
+    {0.1f, 0.5f, -0.005f},    // left elbow
+    {0.105f, 0.395f, 0.01f},  // left wrist
+    {-0.085f, 0.615f, 0.0f},  // right shoulder
+    {-0.1f, 0.5f, -0.005f},
+    {-0.105f, 0.395f, 0.01f},
 }};
+
+constexpr glm::vec3 kHeadCentre(0.0f, 0.8f, 0.005f);
 
 constexpr std::array<int, kBodyJoints> kParent = {
     -1,    kRoot,   kHips, kSpine, kChest, kNeck,     kHips,  kLUpLeg, kLLeg,
@@ -38,13 +41,22 @@ constexpr std::array<int, kBodyJoints> kParent = {
 int capeJoint(int row, int col) { return kBodyJoints + row * kCapeCols + col; }
 
 // The cape at rest: v from the collar (0) to its hem (1), u across from the figure's right (0) to its left (1),
-// wrapped around the shoulders and the back.
+// wrapped round the neck and flaring into a wide bell over the back and the sides, open in front.
+// shaders/world.hlsl measures the marks with the same span and radius.
 glm::vec3 capeRest(float u, float v, float length) {
-    const float span = glm::mix(4.3f, 3.5f, std::sqrt(v));
+    const float span = glm::mix(5.0f, 4.5f, std::sqrt(v));
     const float a = (u - 0.5f) * span;
-    const float rx = glm::mix(0.128f, 0.25f, v);
-    const float rz = glm::mix(0.1f, 0.19f, v);
-    return {-std::sin(a) * rx, 0.865f - v * 0.52f * length, -std::cos(a) * rz - 0.012f - 0.04f * v};
+    const float flare = std::pow(v, 0.85f);
+    const float rx = glm::mix(0.1f, 0.31f, flare);
+    const float rz = glm::mix(0.085f, 0.27f, flare);
+    return {-std::sin(a) * rx, 0.655f - v * 0.45f * length, -std::cos(a) * rz - 0.01f - 0.03f * v};
+}
+
+// The cape spread as wings (the glide, a flap): flat across the back and out past the arms, its edges drooping.
+glm::vec3 capeWing(float u, float v, float length) {
+    const float x = (u - 0.5f) * glm::mix(0.36f, 1.5f, std::sqrt(v));
+    const float side = std::abs(u - 0.5f) * 2.0f;
+    return {-x, 0.655f - v * 0.36f * length, -0.07f - 0.1f * v + 0.16f * side * side * v};
 }
 
 SkinVertex rigid(int joint) {
@@ -108,31 +120,33 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
     CharacterMesh out;
     // The tunic: from a flared hem over the thighs to the neck, bending with the hips, the spine and the chest.
     {
-        const std::vector<glm::vec2> profile = {{1e-4f, 0.33f},  {0.125f, 0.335f}, {0.115f, 0.40f}, {0.098f, 0.50f},
-                                                {0.094f, 0.60f}, {0.104f, 0.72f},  {0.095f, 0.79f}, {0.06f, 0.85f},
-                                                {0.042f, 0.89f}, {1e-4f, 0.91f}};
+        const std::vector<glm::vec2> profile = {{1e-4f, 0.27f},  {0.1f, 0.275f},  {0.094f, 0.33f}, {0.082f, 0.4f},
+                                                {0.078f, 0.48f}, {0.085f, 0.56f}, {0.075f, 0.62f}, {0.048f, 0.66f},
+                                                {0.03f, 0.69f},  {1e-4f, 0.7f}};
         MeshData torso = lathe(profile, 18, glm::vec4(look.body, 1.0f));
-        for (Vertex& v : torso.vertices) v.position.z *= 0.82f;
+        for (Vertex& v : torso.vertices) v.position.z *= 0.85f;
         computeNormals(torso);
         add(out, torso, [](const Vertex& v) {
             const float y = v.position.y;
-            if (y < 0.56f) return rigid(kHips);
-            if (y < 0.68f) return blend(kHips, kSpine, (y - 0.56f) / 0.12f);
-            if (y < 0.76f) return blend(kSpine, kChest, (y - 0.68f) / 0.08f);
-            if (y < 0.86f) return rigid(kChest);
-            return blend(kChest, kNeck, (y - 0.86f) / 0.04f);
+            if (y < 0.44f) return rigid(kHips);
+            if (y < 0.52f) return blend(kHips, kSpine, (y - 0.44f) / 0.08f);
+            if (y < 0.58f) return blend(kSpine, kChest, (y - 0.52f) / 0.06f);
+            if (y < 0.64f) return rigid(kChest);
+            return blend(kChest, kNeck, (y - 0.64f) / 0.04f);
         });
     }
-    // The head: a round pale face with two dark eyes, under a hood whose tip falls back.
-    const glm::vec3 headCentre(0.0f, 1.01f, 0.012f);
-    solid(out, ellipsoid({0.112f, 0.118f, 0.108f}, 12, 18), glm::translate(glm::mat4(1.0f), headCentre), look.face,
+    // The head: a large round hood with the face set back inside it, a small pale mask with two dark eyes.
+    const glm::vec3 headCentre = kHeadCentre;
+    solid(out, ellipsoid({0.13f, 0.128f, 0.125f}, 12, 18), glm::translate(glm::mat4(1.0f), headCentre), look.shade,
           kHead);
+    solid(out, ellipsoid({0.082f, 0.09f, 0.04f}, 10, 14),
+          glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, -0.012f, 0.108f)), look.face, kHead);
     for (const float side : {-1.0f, 1.0f})
-        solid(out, ellipsoid({0.014f, 0.022f, 0.01f}, 6, 8),
-              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.042f, 0.004f, 0.1f)), srgb(40, 34, 44),
+        solid(out, ellipsoid({0.011f, 0.019f, 0.008f}, 6, 8),
+              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.03f, 0.0f, 0.145f)), srgb(36, 30, 40),
               kHead);
     {
-        MeshData hood = ellipsoid({0.142f, 0.15f, 0.148f}, 14, 22);
+        MeshData hood = ellipsoid({0.168f, 0.162f, 0.165f}, 16, 24);
         MeshData shell;
         shell.vertices = hood.vertices;
         // The face opening: no triangle whose corners all look forward below the brow.
@@ -140,12 +154,12 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
             bool open = true;
             for (int k = 0; k < 3; ++k) {
                 const glm::vec3 p = glm::normalize(hood.vertices[hood.indices[i + std::size_t(k)]].position);
-                open = open && p.z > 0.42f && p.y < 0.55f && p.y > -0.75f;
+                open = open && p.z > 0.6f && p.y < 0.4f && p.y > -0.62f;
             }
             if (!open)
                 shell.indices.insert(shell.indices.end(), {hood.indices[i], hood.indices[i + 1], hood.indices[i + 2]});
         }
-        solid(out, shell, glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, 0.02f, -0.018f)), look.hood,
+        solid(out, shell, glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, 0.012f, -0.012f)), look.hood,
               kHead);
         // The tip: a tube along a curve up and back, tapering to a point.
         const int n = 10;
@@ -153,8 +167,8 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
         std::vector<glm::vec3> spine;
         for (int i = 0; i <= n; ++i) {
             const float t = float(i) / float(n);
-            spine.push_back(headCentre + glm::vec3(0.0f, 0.10f + 0.10f * t - 0.12f * t * t * tipLength,
-                                                   -0.06f - 0.26f * t * tipLength));
+            spine.push_back(headCentre + glm::vec3(0.0f, 0.11f + 0.07f * t - 0.1f * t * t * tipLength,
+                                                   -0.07f - 0.2f * t * tipLength));
         }
         MeshData tip;
         const int sides = 10;
@@ -163,13 +177,14 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
                 glm::normalize(spine[std::size_t(std::min(i + 1, n))] - spine[std::size_t(std::max(i - 1, 0))]);
             const glm::mat4 frame = alignY(dir);
             const float t = float(i) / float(n);
-            const float r = 0.085f * (1.0f - t) * (1.0f - 0.3f * t) + 0.004f;
+            const float r = 0.075f * (1.0f - t) * (1.0f - 0.3f * t) + 0.004f;
             for (int s = 0; s <= sides; ++s) {
                 const float a = kTau * float(s) / float(sides);
                 const glm::vec3 offset =
                     glm::vec3(frame * glm::vec4(std::cos(a) * r, 0.0f, std::sin(a) * r * 0.8f, 0.0f));
                 tip.vertices.push_back(
-                    {.position = spine[std::size_t(i)] + offset, .color = glm::vec4(look.hood, 1.0f)});
+                    {.position = spine[std::size_t(i)] + offset,
+                     .color = glm::vec4(glm::mix(look.hood, look.cape, smoothstep(0.1f, 0.5f, t)), 1.0f)});
             }
         }
         for (int i = 0; i < n; ++i)
@@ -184,18 +199,19 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
     // Legs, boots, arms (the tunic's sleeves) and hands.
     for (const int side : {0, 1}) {
         const int up = side == 0 ? kLUpLeg : kRUpLeg;
-        limb(out, kRest[std::size_t(up)], kRest[std::size_t(up + 1)], 0.036f, 0.03f, look.legs, up, kHips, up + 1);
-        limb(out, kRest[std::size_t(up + 1)], kRest[std::size_t(up + 2)], 0.03f, 0.026f, look.legs, up + 1, up, up + 2);
-        solid(out, ellipsoid({0.038f, 0.034f, 0.062f}, 8, 12),
-              glm::translate(glm::mat4(1.0f), kRest[std::size_t(up + 2)] + glm::vec3(0.0f, -0.025f, 0.022f)),
-              look.boots, up + 2);
+        limb(out, kRest[std::size_t(up)], kRest[std::size_t(up + 1)], 0.03f, 0.023f, look.legs, up, kHips, up + 1);
+        limb(out, kRest[std::size_t(up + 1)], kRest[std::size_t(up + 2)], 0.023f, 0.019f, look.legs, up + 1, up,
+             up + 2);
+        solid(out, ellipsoid({0.03f, 0.026f, 0.052f}, 8, 12),
+              glm::translate(glm::mat4(1.0f), kRest[std::size_t(up + 2)] + glm::vec3(0.0f, -0.02f, 0.02f)), look.boots,
+              up + 2);
         const int arm = side == 0 ? kLArm : kRArm;
-        limb(out, kRest[std::size_t(arm)], kRest[std::size_t(arm + 1)], 0.032f, 0.027f, look.body, arm, kChest,
+        limb(out, kRest[std::size_t(arm)], kRest[std::size_t(arm + 1)], 0.027f, 0.023f, look.body, arm, kChest,
              arm + 1);
-        limb(out, kRest[std::size_t(arm + 1)], kRest[std::size_t(arm + 2)], 0.027f, 0.024f, look.body, arm + 1, arm,
+        limb(out, kRest[std::size_t(arm + 1)], kRest[std::size_t(arm + 2)], 0.023f, 0.02f, look.body, arm + 1, arm,
              arm + 2);
-        solid(out, ellipsoid({0.026f, 0.032f, 0.024f}, 6, 10),
-              glm::translate(glm::mat4(1.0f), kRest[std::size_t(arm + 2)] + glm::vec3(0.0f, -0.02f, 0.0f)), look.face,
+        solid(out, ellipsoid({0.022f, 0.027f, 0.02f}, 6, 10),
+              glm::translate(glm::mat4(1.0f), kRest[std::size_t(arm + 2)] + glm::vec3(0.0f, -0.018f, 0.0f)), look.face,
               arm + 2);
     }
     // The cape: a grid three times finer than its joints, each vertex weighted bilinearly to the four joints
@@ -264,6 +280,8 @@ Character::Character(const CharacterLook& look) : m_look(look) {
                 capeRest(float(c) / float(kCapeCols - 1), float(r) / float(kCapeRows - 1), look.capeLength);
             m_bind[std::size_t(capeJoint(r, c))] = p;
             m_clothRest[std::size_t(r * kCapeCols + c)] = p;
+            m_clothWing[std::size_t(r * kCapeCols + c)] =
+                capeWing(float(c) / float(kCapeCols - 1), float(r) / float(kCapeRows - 1), look.capeLength);
         }
     m_rowLength = glm::distance(m_clothRest[0], m_clothRest[kCapeCols]);
     for (int r = 0; r < kCapeRows; ++r)
@@ -277,7 +295,7 @@ void Character::setPlacement(glm::vec3 feet, float yaw, float pitch) {
     m_feet = feet;
     m_yaw = yaw;
     m_pitch = pitch;
-    const float pivot = 0.62f * m_look.scale;
+    const float pivot = 0.5f * m_look.scale;
     m_world = glm::translate(glm::mat4(1.0f), feet) * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
               glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, pivot, 0.0f)) *
               glm::rotate(glm::mat4(1.0f), pitch, glm::vec3(1.0f, 0.0f, 0.0f)) *
@@ -286,6 +304,23 @@ void Character::setPlacement(glm::vec3 feet, float yaw, float pitch) {
 }
 
 glm::vec3 Character::jointWorld(Joint joint) const { return glm::vec3(m_world * m_model[std::size_t(joint)][3]); }
+
+std::pair<glm::vec3, glm::vec3> Character::capeSurface(glm::vec2 uv) const {
+    const float gu = std::clamp(uv.x, 0.0f, 1.0f) * float(kCapeCols - 1);
+    const float gv = std::clamp(uv.y, 0.0f, 1.0f) * float(kCapeRows - 1);
+    const int c = std::min(int(gu), kCapeCols - 2), r = std::min(int(gv), kCapeRows - 2);
+    const float fu = gu - float(c), fv = gv - float(r);
+    auto at = [&](int rr, int cc) { return m_cloth[std::size_t(rr * kCapeCols + cc)]; };
+    const glm::vec3 top = glm::mix(at(r, c), at(r, c + 1), fu);
+    const glm::vec3 bottom = glm::mix(at(r + 1, c), at(r + 1, c + 1), fu);
+    const glm::vec3 p = glm::mix(top, bottom, fv);
+    const glm::vec3 across = glm::mix(at(r, c + 1) - at(r, c), at(r + 1, c + 1) - at(r + 1, c), fv);
+    glm::vec3 n = glm::cross(bottom - top, across);
+    // Outward: away from the chest.
+    if (glm::dot(n, p - jointWorld(kChest)) < 0.0f) n = -n;
+    const float l = glm::length(n);
+    return {p, l > 1e-8f ? n / l : glm::vec3(0.0f, 0.0f, -1.0f)};
+}
 
 void Character::resetCape() {
     for (std::size_t i = 0; i < m_cloth.size(); ++i) {
@@ -485,7 +520,8 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
 
     // The cape follows the shoulders.
     if (!m_clothValid || glm::distance(m_feet, m_lastFeet) > 3.0f) resetCape();
-    simulateCape(dt, in.wind, std::max(glide, in.flap > 0.0f && in.flap < 1.0f ? std::sin(kPi * in.flap) : 0.0f));
+    simulateCape(dt, in.wind, std::max(glide, in.flap > 0.0f && in.flap < 1.0f ? std::sin(kPi * in.flap) : 0.0f),
+                 smoothstep(0.4f, 5.0f, in.speed) * (1.0f - m_air * 0.5f));
     m_lastFeet = m_feet;
 
     const glm::mat4 toModel = glm::inverse(m_world);
@@ -515,7 +551,7 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
         }
 }
 
-void Character::simulateCape(float dt, glm::vec3 wind, float wings) {
+void Character::simulateCape(float dt, glm::vec3 wind, float wings, float swing) {
     const float scale = m_look.scale;
     dt = std::min(dt, 1.0f / 30.0f);
     // The collar follows the chest: the top row is pinned to its bind place in the chest's frame.
@@ -534,12 +570,12 @@ void Character::simulateCape(float dt, glm::vec3 wind, float wings) {
         return glm::vec3(m_world * m_model[std::size_t(j)] * glm::vec4(offset, 1.0f));
     };
     const std::array<Sphere, 6> body = {{
-        {world(kChest, {0.0f, -0.02f, 0.0f}), 0.125f * scale},
-        {world(kSpine, {0.0f, -0.04f, 0.0f}), 0.12f * scale},
-        {world(kHips, {0.0f, -0.08f, 0.0f}), 0.13f * scale},
-        {world(kLUpLeg, {0.0f, -0.12f, 0.0f}), 0.07f * scale},
-        {world(kRUpLeg, {0.0f, -0.12f, 0.0f}), 0.07f * scale},
-        {world(kHead, {0.0f, 0.1f, -0.01f}), 0.15f * scale},
+        {world(kChest, {0.0f, -0.01f, 0.0f}), 0.1f * scale},
+        {world(kSpine, {0.0f, -0.03f, 0.0f}), 0.1f * scale},
+        {world(kHips, {0.0f, -0.06f, 0.0f}), 0.11f * scale},
+        {world(kLUpLeg, {0.0f, -0.1f, 0.0f}), 0.055f * scale},
+        {world(kRUpLeg, {0.0f, -0.1f, 0.0f}), 0.055f * scale},
+        {world(kHead, kHeadCentre - kRest[kHead]), 0.17f * scale},
     }};
     const glm::vec3 gravity(0.0f, -9.81f, 0.0f);
     // Swinging against the body dies out quickly (the cloth's own stiffness and the air), the same at any frame rate.
@@ -556,6 +592,22 @@ void Character::simulateCape(float dt, glm::vec3 wind, float wings) {
         const glm::vec3 next = p + velocity * dt + (gravity + drag) * (dt * dt);
         q = p;
         p = next;
+    }
+    // The cape keeps its shape: each point is drawn toward its place on the shoulders, a bell at rest or spread as
+    // wings, firmly near the collar, loosely at the hem so that it streams and swings.
+    // Running, the bell swings back from the collar and its hem ripples.
+    const glm::vec3 collar(0.0f, 0.655f, -0.01f);
+    for (int i = kCapeCols; i < kCapeCols * kCapeRows; ++i) {
+        const int row = i / kCapeCols, col = i % kCapeCols;
+        const float v = float(row) / float(kCapeRows - 1);
+        const float k = glm::mix(glm::mix(14.0f, 1.2f, v), glm::mix(14.0f, 6.0f, v), wings);
+        const float angle = swing * (0.75f * std::sqrt(v) + 0.12f * v * std::sin(m_time * 11.0f + float(col) * 1.7f));
+        const glm::vec3 d = m_clothRest[std::size_t(i)] - collar;
+        const glm::vec3 swung = collar + glm::vec3(d.x, d.y * std::cos(angle) - d.z * std::sin(angle),
+                                                   d.y * std::sin(angle) + d.z * std::cos(angle));
+        const glm::vec3 shape = glm::mix(swung, m_clothWing[std::size_t(i)], wings);
+        const glm::vec3 target = glm::vec3(chest * glm::vec4(shape, 1.0f));
+        m_cloth[std::size_t(i)] += (target - m_cloth[std::size_t(i)]) * (1.0f - std::exp(-k * dt));
     }
     const float vertical = m_rowLength * scale;
     for (int iteration = 0; iteration < 8; ++iteration) {
@@ -578,7 +630,7 @@ void Character::simulateCape(float dt, glm::vec3 wind, float wings) {
             }
         for (int r = 1; r < kCapeRows; ++r) {
             // Spread as wings, the gathered cape opens wide between the arms.
-            const float spread = 1.0f + wings * (r == 1 ? 0.3f : r == 2 ? 0.6f : 0.8f);
+            const float spread = 1.0f + wings * 0.25f * std::min(float(r), 2.0f);
             const float width = m_rowWidth[std::size_t(r)] * scale * spread;
             for (int c = 0; c + 1 < kCapeCols; ++c) {
                 glm::vec3& a = m_cloth[std::size_t(r * kCapeCols + c)];
