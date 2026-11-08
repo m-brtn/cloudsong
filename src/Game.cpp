@@ -1,4 +1,4 @@
-// Cloudsong: a small caped figure wanders floating isles of grass above a sea of clouds at the golden hour, glides
+// Cloudsong: a small caped figure wanders floating isles of grass above a sea of clouds through the day, glides
 // between them, gathers drifting lights, lights candles, wakes the spirits and brings them to the temple of light.
 
 #include "Character.h"
@@ -249,13 +249,20 @@ public:
             m_previous = m_current;
             return;
         }
+        if (m_settings.dayNightCycle) {
+            m_settings.timeOfDay =
+                std::fmod(m_settings.timeOfDay + float(dt) * 24.0f / (m_settings.dayLengthMinutes * 60.0f), 24.0f);
+            applyTimeOfDay();
+        }
         const app::Input& input = app.input();
         PlayerInput in;
         in.move =
             glm::vec2(input.axis(m_left, m_right), input.axis(m_back, m_forward)) + m_scriptMove + m_touchState.move;
         if (const float l = glm::length(in.move); l > 1.0f) in.move /= l;
         in.walk = input.down(m_walk);
-        in.jumpHeld = input.down(m_jump) || m_scriptJump || m_touchState.jump;
+        const bool jumpDown = input.down(m_jump) || m_scriptJump || m_touchState.jump;
+        if (!jumpDown) m_jumpUntilRelease = false;
+        in.jumpHeld = jumpDown && !m_jumpUntilRelease;
         in.jumpPressed = in.jumpHeld && !m_jumpWasDown;
         m_jumpWasDown = in.jumpHeld;
         in.cameraYaw = m_camera.yaw;
@@ -466,13 +473,14 @@ public:
                         l.updraft + alt + glm::vec3(0.0f, l.updraftTop - l.updraft.y, 0.0f), l.updraftRadius,
                         glm::vec3(0.9f, 1.0f, 1.1f) * 0.5f, 0.05f, 0.6f, 3.0f);
         // A small halo on each lit mark of a cape; the spirits' soft glow.
+        const float markHalo = glm::mix(0.12f, 0.4f, smoothstep(0.0f, 25.0f, m_mood.sunElevation));
         const auto marks = [&](const Character& figure, float energy, int count, float flash) {
             for (int k = 0; k < std::min(count, int(kMarkUv.size())); ++k) {
                 const float lit = std::clamp(energy - float(k), 0.0f, 1.0f);
                 if (lit <= 0.0f) continue;
                 const auto [at, out] = figure.capeSurface(kMarkUv[std::size_t(k)]);
                 m_glow.sprite(at + out * 0.02f * figure.scale(), 0.085f * figure.scale(),
-                              glm::vec3(1.4f, 1.0f, 0.45f) * lit * (1.0f + 1.5f * flash), 0.3f);
+                              glm::vec3(1.4f, 1.0f, 0.45f) * lit * markHalo * (1.0f + 1.5f * flash), 0.3f);
             }
         };
         marks(m_figure, m_player.energy, m_player.maxEnergy, m_flash);
@@ -516,14 +524,8 @@ public:
             }
             m_glow.sprite(p, size, glm::vec3(2.2f, 1.9f, 1.2f), 0.6f);
         }
-        // Flames: the lanterns and the lit candles.
-        for (const glm::vec3& lantern : l.lanterns)
-            m_glow.sprite(lantern + alt, 1.3f + 0.08f * std::sin(m_time * 9.0f + lantern.x),
-                          glm::vec3(2.4f, 1.5f, 0.6f), 0.15f);
-        for (std::size_t i = 0; i < l.candles.size(); ++i)
-            if (m_journey.candleLit(i))
-                m_glow.sprite(l.candles[i] + alt + glm::vec3(0.0f, 0.08f, 0.0f),
-                              1.1f + 0.08f * std::sin(m_time * 11.0f + float(i)), glm::vec3(2.4f, 1.5f, 0.6f), 0.15f);
+        // Lanterns and candles glow from their emissive flame meshes through bloom. Their point lights illuminate
+        // the ground; no camera-facing halo floats in front of their housings.
     }
 
     void ui(App& app) override {
@@ -543,7 +545,7 @@ public:
         if (m_screen != Screen::Title && m_beginFade < 1.0f) m_menus.title(m_settings, 1.0f - m_beginFade, canQuit);
         switch (action) {
         case MenuAction::Begin: begin(); break;
-        case MenuAction::Resume: m_screen = Screen::Playing; break;
+        case MenuAction::Resume: resume(); break;
         case MenuAction::Quit: app.quit(); break;
         case MenuAction::SettingsChanged:
             applySettings(app);
@@ -585,8 +587,14 @@ public:
         m_physics.reset();
     }
 
+    std::optional<glm::vec2> scenarioPoint(std::string_view name) const override { return m_menus.settingsPoint(name); }
+
     std::optional<double> scenarioValue(std::string_view name) const override {
         const glm::vec3 p = m_player.position() - glm::vec3(0.0f, kAltitude, 0.0f);
+        if (name == "settings_open") return m_menus.settingsOpen() ? 1.0 : 0.0;
+        if (name == "time_of_day") return m_settings.timeOfDay;
+        if (name == "day_cycle") return m_settings.dayNightCycle ? 1.0 : 0.0;
+        if (name == "sun_elevation") return m_mood.sunElevation;
         if (name == "x") return p.x;
         if (name == "y") return p.y;
         if (name == "z") return p.z;
@@ -650,6 +658,19 @@ public:
     app::ScenarioExec scenarioCommand(App& app, const app::ScenarioCommand& command) override {
         const auto& a = command.args;
         auto f = [&](std::size_t i) { return parseFloat(a[i]); };
+        if (command.op == "day_cycle" && a.size() == 1 && (a[0] == "on" || a[0] == "off")) {
+            m_settings.dayNightCycle = a[0] == "on";
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "time_of_day" && a.size() == 1) {
+            m_settings.timeOfDay = std::clamp(f(0), 0.0f, 23.99f);
+            applyTimeOfDay();
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "day_length" && a.size() == 1) {
+            m_settings.dayLengthMinutes = std::clamp(f(0), 1.0f, 60.0f);
+            return app::ScenarioExec::Done;
+        }
         if (command.op == "teleport" && a.size() >= 3) {
             const glm::vec3 p = glm::vec3(f(0), f(1), f(2)) + glm::vec3(0.0f, kAltitude, 0.0f);
             const float yaw = a.size() > 3 ? f(3) : m_player.yaw();
@@ -758,8 +779,10 @@ public:
                 m_screen = Screen::Title;
                 m_beginFade = 0.0f;
             } else if (a[0] == "play") {
-                if (m_screen == Screen::Title) begin();
-                m_screen = Screen::Playing;
+                if (m_screen == Screen::Title)
+                    begin();
+                else if (m_screen != Screen::Playing)
+                    resume();
             } else if (a[0] == "pause" || a[0] == "settings") {
                 m_screen = Screen::Paused;
             } else {
@@ -831,7 +854,15 @@ private:
         m_sound.candleLit(at);
         m_sound.spiritWakes(at);
     }
-    // The golden hour: a low warm sun, a pastel sky, a soft haze that pales the far isles.
+    // A continuous sun path, with dawn at 6 and sunset at 18. Weather and effects keep their own clock.
+    void applyTimeOfDay() {
+        const float phase = (m_settings.timeOfDay - 6.0f) * kTau / 24.0f;
+        m_mood.sunElevation = 60.0f * std::sin(phase);
+        m_mood.sunAzimuth = 90.0f + (m_settings.timeOfDay - 6.0f) * 15.0f;
+        applyMood();
+    }
+
+    // Neutral daylight, cool bounce and aerial perspective; sunset warmth comes from the engine's daylight model.
     void applyMood() {
         const Mood& m = m_mood;
         m_towardSun = render::skyDirection(m.sunElevation, m.sunAzimuth);
@@ -845,16 +876,17 @@ private:
         env.skyHorizon *= m.horizon;
         env.sunGlow *= m.glow;
         env.sunDisc *= m.glow;
-        env.skyAmbient = glm::mix(env.skyAmbient, m.ambientTint, 0.5f) * m.ambient;
-        env.groundAmbient = glm::vec3(0.55f, 0.48f, 0.42f);
-        env.skyGround = glm::vec3(1.05f, 0.95f, 0.92f);
+        const float fill = glm::dot(env.skyAmbient, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+        env.skyAmbient = glm::mix(env.skyAmbient, glm::vec3(fill), 0.65f) * m.ambientTint * m.ambient;
+        env.groundAmbient = env.skyAmbient * glm::vec3(0.42f, 0.65f, 0.6f);
+        env.skyGround = day.environment.skyHorizon * glm::vec3(0.72f, 0.86f, 1.0f);
         env.fogDensity = m.fogDensity;
         env.fogFalloff = 0.0009f;
         env.fogBaseHeight = kAltitude;
         env.fogMaxAmount = m.fogMax;
         env.fogSunScatter = 0.8f;
-        env.fogColor = m.fogColor;
-        env.exposure = m.exposure;
+        env.fogColor = day.environment.fogColor * m.fogColor;
+        env.exposure = day.environment.exposure * m.exposure;
         m_scene->setEnvironment(env);
     }
     bool updraftOpen() const { return m_journey.candlesLit() == m_world.landmarks().candles.size(); }
@@ -912,13 +944,22 @@ private:
         return glm::lookAt(v.first, v.second, glm::vec3(0.0f, 1.0f, 0.0f));
     }
 
+    // Menu confirmation may share a physical button with jump. Suppress both the edge and hold
+    // until release, so resuming in mid-air cannot flap or start gliding either.
+    void resume() {
+        m_screen = Screen::Playing;
+        m_jumpUntilRelease = true;
+        m_jumpWasDown = false;
+        m_callWasDown = true;
+        m_touchCall = false;
+    }
+
     void begin() {
         if (m_screen != Screen::Title) return;
-        m_screen = Screen::Playing;
+        resume();
         m_menus.openSettings(false);
         m_begunAt = m_time;
         m_beginFade = 0.0f;
-        m_jumpWasDown = true; // the Space that began is not a jump
     }
 
     // Pause and resume, the touch controls, the title's fade.
@@ -945,7 +986,7 @@ private:
             if (m_menus.settingsOpen())
                 m_menus.openSettings(false);
             else
-                m_screen = Screen::Playing;
+                resume();
         } else if (m_screen == Screen::Title && !m_menus.settingsOpen() && input.pressed(m_confirm)) {
             begin();
         }
@@ -974,6 +1015,7 @@ private:
 
     // The quality's render settings and the volumes.
     void applySettings(App& app) {
+        applyTimeOfDay();
         render::RenderSettings rs = m_renderer->settings();
         rs.cloudShadows = true;
         rs.cloudShadowHeight = kAltitude;
@@ -1025,15 +1067,15 @@ private:
     }
 
     struct Mood {
-        float sunElevation = 10.0f, sunAzimuth = 135.0f; // degrees: ahead and to the right on the way to the temple
-        glm::vec3 sunTint{1.4f, 0.98f, 0.68f};
-        float sunScale = 1.2f;
-        float atmosphere = 1.0f;
-        glm::vec3 zenith{0.82f, 0.9f, 1.08f}, horizon{1.2f, 0.95f, 0.88f}, glow{1.7f, 1.25f, 0.85f}; // daylight tints
-        glm::vec3 ambientTint{0.55f, 0.62f, 0.9f}; // a cool fill against the warm sun
-        float ambient = 1.4f;
-        float fogDensity = 0.0009f, fogMax = 0.9f;
-        glm::vec3 fogColor{0.94f, 0.8f, 0.8f};
+        float sunElevation = 60.0f, sunAzimuth = 180.0f; // degrees: ahead and to the right on the way to the temple
+        glm::vec3 sunTint{1.0f, 1.0f, 1.0f};
+        float sunScale = 1.0f;
+        float atmosphere = 0.35f;
+        glm::vec3 zenith{0.48f, 1.05f, 1.35f}, horizon{0.55f, 1.05f, 1.25f}, glow{1.0f, 1.0f, 1.0f}; // daylight tints
+        glm::vec3 ambientTint{0.9f, 1.0f, 1.08f}; // a cool fill against the warm sun
+        float ambient = 1.3f;
+        float fogDensity = 0.00055f, fogMax = 0.9f;
+        glm::vec3 fogColor{0.7f, 0.93f, 1.12f};
         float exposure = 1.08f;
     };
 
@@ -1078,6 +1120,7 @@ private:
     bool m_touchUi = false, m_touchCall = false;
     float m_begunAt = -100.0f; // m_time when the player began
     float m_beginFade = 1.0f;  // 0..1 from the title's view to the player's
+    bool m_jumpUntilRelease = false;
     bool m_jumpWasDown = false, m_callWasDown = false, m_scriptCall = false;
     float m_callAge = 100.0f;
     glm::vec3 m_callCentre{0.0f};

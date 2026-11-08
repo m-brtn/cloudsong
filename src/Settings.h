@@ -17,6 +17,9 @@ struct Settings {
     float effects = 1.0f; // 0..1
     float lookSpeed = 1.0f;
     bool invertLook = false;
+    bool dayNightCycle = false;
+    float timeOfDay = 11.5f;        // hours, frozen until the player enables the cycle
+    float dayLengthMinutes = 20.0f; // real minutes per full day
 };
 
 const char* qualityName(Quality quality);

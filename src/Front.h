@@ -11,7 +11,10 @@
 #include <glm/vec4.hpp>
 
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <string>
+#include <string_view>
 
 struct ImFont;
 
@@ -28,6 +31,10 @@ public:
     MenuAction pause(Settings& settings, bool canQuit);
     // A line of text low on the screen (the controls, a few seconds after the start).
     void hint(const char* text, float alpha);
+    std::optional<glm::vec2> settingsPoint(std::string_view name) const {
+        const auto it = m_settingsPoints.find(name);
+        return m_settings && it != m_settingsPoints.end() ? std::optional(it->second) : std::nullopt;
+    }
     bool settingsOpen() const { return m_settings; }
     void openSettings(bool open) { m_settings = open; }
 
@@ -36,6 +43,7 @@ private:
     float scale() const;
     bool button(const char* label, float width, float scale);
 
+    std::map<std::string, glm::vec2, std::less<>> m_settingsPoints;
     ImFont* m_font = nullptr;
     bool m_touch = false;
     bool m_settings = false;

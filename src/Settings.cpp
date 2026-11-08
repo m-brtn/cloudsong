@@ -34,6 +34,9 @@ Settings parseSettings(const std::string& text, const Settings& defaults) {
     s.effects = std::clamp(float(v["effects"].numberOr(defaults.effects)), 0.0f, 1.0f);
     s.lookSpeed = std::clamp(float(v["look_speed"].numberOr(defaults.lookSpeed)), 0.25f, 3.0f);
     s.invertLook = v["invert_look"].boolOr(defaults.invertLook);
+    s.dayNightCycle = v["day_night_cycle"].boolOr(defaults.dayNightCycle);
+    s.timeOfDay = std::clamp(float(v["time_of_day"].numberOr(defaults.timeOfDay)), 0.0f, 23.99f);
+    s.dayLengthMinutes = std::clamp(float(v["day_length_minutes"].numberOr(defaults.dayLengthMinutes)), 1.0f, 60.0f);
     return s;
 }
 
@@ -45,6 +48,9 @@ std::string writeSettings(const Settings& s) {
     v.object["effects"] = json::Value::makeNumber(double(s.effects));
     v.object["look_speed"] = json::Value::makeNumber(double(s.lookSpeed));
     v.object["invert_look"] = json::Value::makeBool(s.invertLook);
+    v.object["day_night_cycle"] = json::Value::makeBool(s.dayNightCycle);
+    v.object["time_of_day"] = json::Value::makeNumber(double(s.timeOfDay));
+    v.object["day_length_minutes"] = json::Value::makeNumber(double(s.dayLengthMinutes));
     return json::write(v) + "\n";
 }
 

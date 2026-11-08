@@ -15,6 +15,8 @@ void foliageSway(inout QuenchVertexIn v, InstanceData instance) {
 #if defined(QUENCH_STAGE_FRAGMENT)
 QuenchSurface foliage(QuenchSurfaceInput i) {
     QuenchSurface s = quenchStandardSurface(i);
+    // Blades use the meadow's upward shading normal on both sides, avoiding black back-facing needles.
+    s.normal = normalize(float3(s.normal.x * 0.35, abs(s.normal.y), s.normal.z * 0.35));
     const float along = saturate(i.uv.x);
     // Light through the blades when the sun is behind them.
     const float back = saturate(dot(-i.view, quenchFrame.sunDir.xyz));

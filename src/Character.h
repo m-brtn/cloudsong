@@ -21,8 +21,8 @@ namespace cloudsong {
 struct CharacterLook {
     glm::vec3 cape = srgb(226, 96, 70); // linear
     glm::vec3 capeInner = srgb(150, 50, 44);
-    glm::vec3 hood = srgb(226, 214, 196);
-    glm::vec3 body = srgb(214, 198, 178); // the tunic and the sleeves
+    glm::vec3 hood = srgb(239, 242, 238);
+    glm::vec3 body = srgb(221, 231, 226); // the tunic and the sleeves
     glm::vec3 legs = srgb(52, 46, 58);
     glm::vec3 face = srgb(252, 249, 244); // a small pale mask
     glm::vec3 shade = srgb(96, 78, 74);   // inside the hood, round the mask

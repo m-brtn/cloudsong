@@ -72,8 +72,8 @@ float Isle::slope(glm::vec2 xz) const {
 glm::vec3 Isle::grassColor(glm::vec2 xz) const {
     const float a = fbm(xz / 22.0f, 3, desc.seed + 11) * 0.5f + 0.5f;
     const float b = fbm(xz / 6.0f, 2, desc.seed + 13) * 0.5f + 0.5f;
-    glm::vec3 c = lerpColor(srgb(92, 140, 72), srgb(156, 178, 94), smoothstep(0.3f, 0.75f, a));
-    c = lerpColor(c, srgb(76, 124, 80), smoothstep(0.62f, 0.95f, b) * 0.6f);
+    glm::vec3 c = lerpColor(srgb(68, 140, 89), srgb(117, 177, 112), smoothstep(0.3f, 0.75f, a));
+    c = lerpColor(c, srgb(55, 126, 95), smoothstep(0.62f, 0.95f, b) * 0.6f);
     return c;
 }
 
@@ -507,20 +507,22 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                     const float tall = glm::mix(0.09f, 0.24f, smoothstep(0.2f, 0.8f, meadow)) *
                                        (1.0f - 0.5f * smoothstep(0.8f, 0.93f, t)) * glm::mix(0.3f, 1.0f, shade(p));
                     const glm::vec3 root(p.x - origin.x, *h - origin.y, p.y - origin.z);
-                    const int blades = 5;
+                    // Broad quiet areas between tufts: the green ground carries the meadow at distance.
+                    const float cover = smoothstep(0.3f, 0.68f, meadow);
+                    const int blades = random.uniform() < glm::mix(0.18f, 0.8f, cover) ? 3 : 0;
                     for (int b = 0; b < blades; ++b) {
                         const float a = random.uniform(0.0f, kTau);
                         const glm::vec2 dir(std::cos(a), std::sin(a));
                         const float height = tall * random.uniform(0.6f, 1.15f);
-                        const float width = 0.024f * random.uniform(0.8f, 1.2f);
+                        const float width = 0.008f * random.uniform(0.8f, 1.2f);
                         const float lean = random.uniform(0.05f, 0.35f) * height;
                         const glm::vec2 side(-dir.y, dir.x);
                         const glm::vec3 offset(dir.x * 0.04f * float(b), 0.0f, dir.y * 0.04f * float(b));
                         const glm::vec3 r0 = root + offset * 0.5f;
                         const glm::vec3 tip = r0 + glm::vec3(dir.x * lean, height, dir.y * lean);
                         const glm::vec3 tipColor =
-                            base * glm::vec3(1.35f, 1.32f, 1.12f) + glm::vec3(0.03f, 0.03f, 0.01f);
-                        const glm::vec3 rootColor = base * 0.6f;
+                            base * glm::vec3(1.12f, 1.2f, 1.16f) + glm::vec3(0.008f, 0.02f, 0.014f);
+                        const glm::vec3 rootColor = base * 0.85f;
                         const glm::vec3 up = glm::normalize(glm::vec3(dir.x * 0.25f, 1.0f, dir.y * 0.25f));
                         auto blade = [&](MeshData& m, float w) {
                             const auto first = std::uint32_t(m.vertices.size());
@@ -532,21 +534,37 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                                                   .normal = up,
                                                   .uv = {0.0f, r0.y},
                                                   .color = glm::vec4(rootColor, 1.0f)});
+                            const glm::vec3 middle =
+                                r0 + glm::vec3(dir.x * lean * 0.3f, height * 0.6f, dir.y * lean * 0.3f);
+                            for (const float sign : {-1.0f, 1.0f})
+                                m.vertices.push_back(
+                                    {.position = middle + glm::vec3(side.x, 0.0f, side.y) * w * 0.72f * sign,
+                                     .normal = up,
+                                     .uv = {0.6f, r0.y},
+                                     .color = glm::vec4(glm::mix(rootColor, tipColor, 0.6f), 1.0f)});
                             m.vertices.push_back({.position = tip,
                                                   .normal = up,
                                                   .uv = {1.0f, r0.y},
                                                   .color = glm::vec4(tipColor, 1.0f)});
-                            m.indices.insert(m.indices.end(), {first, first + 1, first + 2});
+                            m.indices.insert(m.indices.end(), {first, first + 1, first + 2, first + 1, first + 3,
+                                                               first + 2, first + 2, first + 3, first + 4});
                         };
                         blade(nearMesh, width);
-                        if (far && b < 3) blade(farMesh, width * 1.8f);
+                        if (far && b < 3) blade(farMesh, width * 1.25f);
                     }
                     // Flowers in the flower fields.
                     const float field = fbm(p / 7.0f, 2, d.seed + 31) * 0.5f + 0.5f;
-                    if (random.uniform() < d.flowers * (0.06f + 0.42f * smoothstep(0.4f, 0.7f, field))) {
-                        const glm::vec3 color = petals[std::size_t(random.range(int(petals.size())))];
+                    if (random.uniform() < d.flowers * (0.65f * smoothstep(0.63f, 0.78f, field))) {
+                        // Related colours within a field, with occasional pale flowers at its edge.
+                        const float palette = fbm(p / 15.0f, 2, d.seed + 49) * 0.5f + 0.5f;
+                        const glm::vec3 color = petals[std::size_t(std::clamp(int(palette * 5.0f), 0, 4))];
                         const float height = tall * random.uniform(1.0f, 1.5f) + 0.05f;
-                        const float size = random.uniform(0.035f, 0.06f);
+                        const float size = random.uniform(0.035f, 0.065f);
+                        const float spin = random.uniform(0.0f, kTau);
+                        const glm::vec3 headNormal =
+                            glm::normalize(glm::vec3(random.uniform(-0.5f, 0.5f), 1.0f, random.uniform(-0.5f, 0.5f)));
+                        const glm::vec3 headX = glm::normalize(glm::cross(headNormal, glm::vec3(0, 0, 1)));
+                        const glm::vec3 headZ = glm::cross(headX, headNormal);
                         const glm::vec3 head =
                             root + glm::vec3(random.uniform(-0.03f, 0.03f), height, random.uniform(-0.03f, 0.03f));
                         auto flower = [&](MeshData& m) {
@@ -561,24 +579,24 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                             m.vertices.push_back(
                                 {.position = head, .uv = {1.0f, root.y}, .color = glm::vec4(base * 1.2f, 1.0f)});
                             m.indices.insert(m.indices.end(), {first, first + 1, first + 2});
-                            // The head: five petals around a yellow eye, facing up.
+                            // A shallow four-lobed cup: rounded petals, not the old five-point star.
                             first = std::uint32_t(m.vertices.size());
-                            m.vertices.push_back({.position = head + glm::vec3(0.0f, 0.004f, 0.0f),
-                                                  .normal = {0, 1, 0},
+                            m.vertices.push_back({.position = head - headNormal * size * 0.18f,
+                                                  .normal = headNormal,
                                                   .uv = {3.0f, root.y},
-                                                  .color = glm::vec4(srgb(255, 200, 60), 1.0f)});
-                            const float spin = random.uniform(0.0f, kTau);
-                            for (int k = 0; k < 10; ++k) {
-                                const float a = spin + kTau * float(k) / 10.0f;
-                                const float rr = (k % 2 == 0 ? 1.0f : 0.45f) * size;
+                                                  .color = glm::vec4(color * 0.82f, 1.0f)});
+                            constexpr int segments = 16;
+                            for (int k = 0; k < segments; ++k) {
+                                const float a = spin + kTau * float(k) / float(segments);
+                                const float rr = size * (0.82f + 0.18f * std::cos(4.0f * (a - spin)));
                                 m.vertices.push_back(
-                                    {.position = head + glm::vec3(std::cos(a) * rr, 0.0f, std::sin(a) * rr),
-                                     .normal = {0, 1, 0},
+                                    {.position = head + (headX * std::cos(a) + headZ * std::sin(a)) * rr,
+                                     .normal = headNormal,
                                      .uv = {3.0f, root.y},
                                      .color = glm::vec4(color, 1.0f)});
                             }
-                            for (int k = 0; k < 10; ++k)
-                                m.indices.insert(m.indices.end(), {first, first + 1 + std::uint32_t((k + 1) % 10),
+                            for (int k = 0; k < segments; ++k)
+                                m.indices.insert(m.indices.end(), {first, first + 1 + std::uint32_t((k + 1) % segments),
                                                                    first + 1 + std::uint32_t(k)});
                         };
                         flower(nearMesh);
@@ -647,19 +665,35 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
             block(glm::vec3(p.x, groundY(p.x, p.z) + height * 0.5f - 0.3f, p.z),
                   glm::vec3(0.32f, height * 0.5f + 0.3f, 0.38f), yaw);
         }
-        // The curve: wedge blocks along a half circle.
-        const int pieces = 9;
+        // Curved masonry with rounded cross-section edges: continuous arches instead of overlapping boxes.
+        const int pieces = 9, slices = 5;
         const float radius = span * 0.5f;
-        const float top = centre.y + height;
+        const glm::vec2 section[] = {{-0.22f, -0.31f}, {-0.16f, -0.38f}, {0.16f, -0.38f}, {0.22f, -0.31f},
+                                     {0.22f, 0.31f},   {0.16f, 0.38f},   {-0.16f, 0.38f}, {-0.22f, 0.31f}};
         for (int i = 0; i < pieces; ++i) {
-            const float a = kPi * (float(i) + 0.5f) / float(pieces);
-            const glm::vec3 p = centre + across * (std::cos(a) * radius) +
-                                glm::vec3(0.0f, top - centre.y + std::sin(a) * radius * 0.8f, 0.0f);
-            MeshData b = render::boxMesh(glm::vec3(0.36f, 0.22f, 0.4f));
-            const glm::mat4 m = glm::translate(glm::mat4(1.0f), p + kAlt) *
-                                glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                                glm::rotate(glm::mat4(1.0f), a - kPi * 0.5f, glm::vec3(0.0f, 0.0f, 1.0f));
-            append(stones, b, m, glm::vec4(stoneColor(random), 1.0f));
+            MeshData wedge;
+            for (int j = 0; j <= slices; ++j) {
+                const float a = kPi * (float(i) + glm::mix(0.008f, 0.992f, float(j) / float(slices))) / float(pieces);
+                for (const glm::vec2 q : section)
+                    wedge.vertices.push_back({.position = {(radius + q.x) * std::cos(a),
+                                                           height + (radius + q.x) * std::sin(a) * 0.8f, q.y}});
+            }
+            for (int j = 0; j < slices; ++j)
+                for (int k = 0; k < 8; ++k) {
+                    const auto a = std::uint32_t(j * 8 + k), b = std::uint32_t(j * 8 + (k + 1) % 8);
+                    wedge.indices.insert(wedge.indices.end(), {a, b, b + 8, a, b + 8, a + 8});
+                }
+            for (int k = 1; k < 7; ++k) {
+                wedge.indices.insert(wedge.indices.end(), {0, std::uint32_t(k + 1), std::uint32_t(k)});
+                const auto end = std::uint32_t(slices * 8);
+                wedge.indices.insert(wedge.indices.end(), {end, end + std::uint32_t(k), end + std::uint32_t(k + 1)});
+            }
+            for (std::size_t k = 0; k < wedge.indices.size(); k += 3)
+                std::swap(wedge.indices[k + 1], wedge.indices[k + 2]);
+            computeNormals(wedge);
+            const glm::mat4 m =
+                glm::translate(glm::mat4(1.0f), centre + kAlt) * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0, 1, 0));
+            append(stones, wedge, m, glm::vec4(stoneColor(random), 1.0f));
         }
     };
 

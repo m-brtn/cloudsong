@@ -24,6 +24,34 @@ tap Escape
 wait 0.1
 expect screen == 1
 
+# A held gamepad confirmation must not leak through Resume into jump/glide.
+gamepad attach
+gamepad button start tap
+wait 0.3
+expect screen == 2
+# Establish navigation focus on Resume (the pointer may previously have owned focus).
+gamepad button dpdown tap
+wait 0.1
+gamepad button dpup tap
+wait 0.1
+gamepad button a down
+wait 0.15
+expect screen == 1
+expect grounded == 1
+wait 0.4
+expect grounded == 1
+expect glide == 0
+gamepad button a up
+wait 0.1
+# A genuinely new press still jumps.
+gamepad button a down
+wait 0.15
+expect grounded == 0
+gamepad button a up
+until grounded == 1 3
+gamepad detach
+wait 0.1
+
 # The quality's render settings.
 quality low
 expect render_scale < 0.71

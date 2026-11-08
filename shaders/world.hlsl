@@ -74,7 +74,7 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         s.albedo *= lerp(0.84, 1.1, n);
         const float steep = 1.0 - smoothstep(0.45, 0.75, i.normal.y);
         if (steep > 0.0) {
-            s.albedo = lerp(s.albedo, csStone(i, float3(0.42, 0.37, 0.32)), steep * 0.85);
+            s.albedo = lerp(s.albedo, csStone(i, float3(0.29, 0.36, 0.38)), steep * 0.85);
             s.normal = normalize(lerp(s.normal, csBump(i, s.normal, 0.35, 0.35), steep));
             s.roughness = lerp(s.roughness, 0.85, steep);
         }
@@ -84,7 +84,7 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         s.normal = csBump(i, csBump(i, s.normal, 0.35, 0.35), 1.4, 0.12);
         const float patches = csNoise(i.world.xz * 0.35 + i.world.y * 0.2) * 0.6 + csNoise(i.world.xz * 1.7) * 0.4;
         const float moss = smoothstep(0.2, 0.55, s.normal.y + (patches - 0.5) * 0.4) * step(0.04, i.uv.y);
-        s.albedo = lerp(s.albedo, float3(0.2, 0.3, 0.11) * lerp(0.8, 1.2, patches), moss * 0.85);
+        s.albedo = lerp(s.albedo, float3(0.09, 0.27, 0.18) * lerp(0.8, 1.2, patches), moss * 0.85);
         s.emissive += csRim(i, s.normal, 0.08) * s.albedo;
     } else if (mode < 1.5) {
         // Stone: weathered, with moss on its upper faces.
@@ -94,7 +94,7 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         // Moss in patches on what faces up, more toward the edges of the stone.
         const float patches = csNoise(i.world.xz * 0.9 + i.world.y * 0.3) * 0.65 + csNoise(i.world.xz * 3.7) * 0.35;
         const float moss = smoothstep(0.5, 0.75, i.normal.y) * smoothstep(0.52, 0.78, patches);
-        s.albedo = lerp(s.albedo, float3(0.2, 0.3, 0.1), moss * 0.8);
+        s.albedo = lerp(s.albedo, float3(0.09, 0.27, 0.18), moss * 0.8);
         s.roughness = lerp(s.roughness, 0.95, moss);
         s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
     } else if (mode > 2.5) {
@@ -107,7 +107,7 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
             s.albedo = csStone(i, s.albedo);
             s.normal = csBump(i, s.normal, 0.5, 0.3);
             const float moss = smoothstep(0.45, 0.8, i.normal.y + (n - 0.5) * 0.5);
-            s.albedo = lerp(s.albedo, float3(0.24, 0.34, 0.12), moss * 0.9);
+            s.albedo = lerp(s.albedo, float3(0.12, 0.3, 0.19), moss * 0.9);
             s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
         } else {
             // Soft moss in wide patches, pale damp stone between them; specks that glow in the moss.
@@ -131,8 +131,8 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
             const float v = i.uv.y;
             if (!i.front) s.albedo *= 0.5;
             // The cape's size in metres at this height (Character.cpp's capeRest): u across its arc, v down.
-            const float flare = pow(v, 0.85);
-            const float across = lerp(5.0, 4.5, sqrt(v)) * lerp(0.1, 0.31, flare);
+            const float flare = sin(v * 1.57079633);
+            const float across = lerp(5.0, 4.5, sqrt(v)) * lerp(0.1, 0.285, flare);
             const float down = 0.45;
             // Character.h's kMarkUv, in the order the marks light.
             static const float2 kMarks[8] = {float2(0.5, 0.2),   float2(0.5, 0.37), float2(0.5, 0.54),  float2(0.5, 0.71),
@@ -150,11 +150,15 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
             }
             const float3 gold = float3(1.0, 0.76, 0.36);
             s.albedo = lerp(s.albedo, lerp(s.albedo * 0.7 + gold * 0.15, gold, saturate(lit * 2.0)), shape * 0.9);
-            const float trim = smoothstep(0.885, 0.9, v);
-            const float seam = smoothstep(0.855, 0.865, v) * (1.0 - smoothstep(0.875, 0.885, v));
-            s.albedo = lerp(s.albedo, s.albedo * 0.32, trim);
+            const float trim = smoothstep(0.955, 0.975, v);
+            const float seam = smoothstep(0.925, 0.933, v) * (1.0 - smoothstep(0.942, 0.95, v));
+            s.albedo = lerp(s.albedo, s.albedo * 0.55, trim);
             s.albedo = lerp(s.albedo, gold * 0.8, seam);
-            s.emissive += gold * lit * (6.0 + 10.0 * i.custom.z) * (1.0 - dormant) * (i.front ? 1.0 : 0.25);
+            // Preserve a readable diamond at night without flooding its surrounding cloth with bloom.
+            const float markDaylight = smoothstep(0.0, 0.42261826, quenchFrame.sunDir.y);
+            const float markLight = lerp(1.2, 6.0, markDaylight);
+            s.emissive += gold * lit * markLight * (1.0 + 1.666667 * i.custom.z) * (1.0 - dormant) *
+                          (i.front ? 1.0 : 0.25);
         }
         // Dormant: grey stone-like.
         const float grey = dot(s.albedo, float3(0.3, 0.55, 0.15));
@@ -162,8 +166,17 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         // A soft light round the edges that lifts the figures off the grass, strongest against the sun.
         const float edge = pow(1.0 - saturate(dot(s.normal, i.view)), 2.5);
         const float towardSun = saturate(dot(-i.view, quenchFrame.sunDir.xyz) * 0.5 + 0.5);
-        s.emissive += quenchFrame.sunColor.rgb * edge * (0.08 + 0.4 * towardSun) * lerp(s.albedo + 0.15, 0.25, dormant);
-        s.roughness = 0.8;
+        s.emissive += quenchFrame.sunColor.rgb * edge * (0.04 + 0.16 * towardSun) * lerp(s.albedo + 0.15, 0.25, dormant);
+        if (i.uv.x >= 1.5) {
+            // Thin cloth carries a little warm light through its back, unlike the opaque tunic and hood.
+            const float through = saturate(dot(-s.normal, quenchFrame.sunDir.xyz));
+            s.emissive += s.albedo * quenchFrame.sunColor.rgb * through * 0.075 * (1.0 - dormant);
+        }
+        // A restrained weave, filtered away before it can shimmer at a distance.
+        const float2 clothUv = i.uv * float2(150.0, 110.0);
+        const float weaveFade = 1.0 - smoothstep(0.2, 0.75, max(fwidth(clothUv.x), fwidth(clothUv.y)));
+        s.albedo *= 1.0 + 0.025 * sin(clothUv.x * 6.2831853) * sin(clothUv.y * 6.2831853) * weaveFade;
+        s.roughness = 0.92;
     }
     return s;
 }

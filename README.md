@@ -1,7 +1,7 @@
 # Cloudsong
 
 A calm exploration game on the [Quench](https://github.com/m-brtn/Quench) engine: a small hooded figure with a long
-cape on grassy isles that float at the golden hour above a sea of clouds. Walk, run, jump, glide and fly between the
+cape on grassy isles that float above a sea of clouds. Walk, run, jump, glide and fly between the
 isles, gather drifting lights, light the old candles, wake the sleeping spirits and bring them to the temple of light.
 A short journey of about ten to fifteen minutes.
 
@@ -12,7 +12,7 @@ A short journey of about ten to fifteen minutes.
 | ![Gliding over the sea of clouds](docs/images/glide.jpg) | ![The isles and the temple of light](docs/images/isles.jpg) |
 | ![A spirit woken by the pond](docs/images/spirit.jpg) | ![In the green cave, under the light from its roof](docs/images/cave_roof.jpg) |
 
-Everything in it but one font is made by code: the isles, the grass and flowers, the ruins, the figures, their capes,
+Except for one font and the illustrated app icon, its content is made by code: the isles, the grass and flowers, the ruins, the figures, their capes,
 the light, the music and the sounds (see `CREDITS.md`).
 
 ## The journey
@@ -37,7 +37,10 @@ player up to the temple of light. Stand at its altar with the spirits.
 | Rest (pause, settings) | Escape | Start (Menu) | the pause button |
 
 Settings (on the title and when resting): picture quality (Light, Balanced, Beautiful), music and sound volume,
-camera speed and inverted camera. They are kept in the user directory (`settings.json`). Phones start at Balanced and
+camera speed, inverted camera, and time of day. The day/night cycle starts frozen at 11:30; enable it to let the
+sun move, choose a full day of 1–60 minutes, or use Morning / Noon / Evening to compare the lighting. Resting
+pauses the cycle. The settings list scrolls between a fixed header and Back button. Preferences are kept in the
+user directory (`settings.json`). Phones start at Balanced and
 60 Hz with a lower render scale, and lower it further when they grow hot.
 
 ## Build

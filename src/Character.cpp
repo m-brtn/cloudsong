@@ -46,17 +46,20 @@ int capeJoint(int row, int col) { return kBodyJoints + row * kCapeCols + col; }
 glm::vec3 capeRest(float u, float v, float length) {
     const float span = glm::mix(5.0f, 4.5f, std::sqrt(v));
     const float a = (u - 0.5f) * span;
-    const float flare = std::pow(v, 0.85f);
-    const float rx = glm::mix(0.1f, 0.31f, flare);
-    const float rz = glm::mix(0.085f, 0.27f, flare);
-    return {-std::sin(a) * rx, 0.655f - v * 0.45f * length, -std::cos(a) * rz - 0.01f - 0.03f * v};
+    const float flare = std::sin(v * kPi * 0.5f);
+    const float rx = glm::mix(0.1f, 0.285f, flare);
+    const float rz = glm::mix(0.085f, 0.23f, flare);
+    const float split =
+        0.12f * std::pow(std::max(0.0f, 1.0f - std::abs(u - 0.5f) / 0.13f), 2.0f) * smoothstep(0.62f, 1.0f, v);
+    return {-std::sin(a) * rx, 0.655f - v * 0.45f * length + split, -std::cos(a) * rz - 0.01f - 0.03f * v};
 }
 
 // The cape spread as wings (the glide, a flap): flat across the back and out past the arms, its edges drooping.
 glm::vec3 capeWing(float u, float v, float length) {
     const float x = (u - 0.5f) * glm::mix(0.36f, 1.5f, std::sqrt(v));
     const float side = std::abs(u - 0.5f) * 2.0f;
-    return {-x, 0.655f - v * 0.36f * length, -0.07f - 0.1f * v + 0.16f * side * side * v};
+    const float split = 0.12f * std::pow(std::max(0.0f, 1.0f - side / 0.26f), 2.0f) * smoothstep(0.62f, 1.0f, v);
+    return {-x, 0.655f - v * 0.36f * length + split, -0.07f - 0.1f * v + 0.16f * side * side * v};
 }
 
 SkinVertex rigid(int joint) {
@@ -96,7 +99,7 @@ void limb(CharacterMesh& out, glm::vec3 a, glm::vec3 b, float ra, float rb, glm:
         profile.push_back({glm::mix(ra, rb, t), t * len});
     }
     profile.push_back({1e-4f, len + rb * 0.6f});
-    MeshData tube = lathe(profile, 10, glm::vec4(color, 1.0f));
+    MeshData tube = lathe(profile, 16, glm::vec4(color, 1.0f));
     const glm::mat4 m = glm::translate(glm::mat4(1.0f), a) * alignY(b - a);
     MeshData placedTube;
     append(placedTube, tube, m);
@@ -120,10 +123,10 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
     CharacterMesh out;
     // The tunic: from a flared hem over the thighs to the neck, bending with the hips, the spine and the chest.
     {
-        const std::vector<glm::vec2> profile = {{1e-4f, 0.27f},  {0.1f, 0.275f},  {0.094f, 0.33f}, {0.082f, 0.4f},
-                                                {0.078f, 0.48f}, {0.085f, 0.56f}, {0.075f, 0.62f}, {0.048f, 0.66f},
+        const std::vector<glm::vec2> profile = {{1e-4f, 0.27f},  {0.123f, 0.275f}, {0.112f, 0.33f}, {0.082f, 0.4f},
+                                                {0.078f, 0.48f}, {0.10f, 0.56f},   {0.075f, 0.62f}, {0.048f, 0.66f},
                                                 {0.03f, 0.69f},  {1e-4f, 0.7f}};
-        MeshData torso = lathe(profile, 18, glm::vec4(look.body, 1.0f));
+        MeshData torso = lathe(profile, 32, glm::vec4(look.body, 1.0f));
         for (Vertex& v : torso.vertices) v.position.z *= 0.85f;
         computeNormals(torso);
         add(out, torso, [](const Vertex& v) {
@@ -135,89 +138,106 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
             return blend(kChest, kNeck, (y - 0.64f) / 0.04f);
         });
     }
-    // The head: a large round hood with the face set back inside it, a small pale mask with two dark eyes.
+    // An inset mask within a continuous, tailored hood opening.
     const glm::vec3 headCentre = kHeadCentre;
-    solid(out, ellipsoid({0.13f, 0.128f, 0.125f}, 12, 18), glm::translate(glm::mat4(1.0f), headCentre), look.shade,
+    solid(out, ellipsoid({0.12f, 0.13f, 0.12f}, 20, 28), glm::translate(glm::mat4(1.0f), headCentre), look.shade,
           kHead);
-    solid(out, ellipsoid({0.082f, 0.09f, 0.04f}, 10, 14),
-          glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, -0.012f, 0.108f)), look.face, kHead);
-    for (const float side : {-1.0f, 1.0f})
-        solid(out, ellipsoid({0.011f, 0.019f, 0.008f}, 6, 8),
-              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.03f, 0.0f, 0.145f)), srgb(36, 30, 40),
+    solid(out, ellipsoid({0.076f, 0.088f, 0.033f}, 20, 28),
+          glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, -0.015f, 0.112f)), look.face, kHead);
+    for (const float side : {-1.0f, 1.0f}) {
+        solid(out, ellipsoid({0.009f, 0.016f, 0.006f}, 10, 14),
+              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.028f, -0.007f, 0.144f)), srgb(38, 38, 49),
               kHead);
-    {
-        MeshData hood = ellipsoid({0.168f, 0.162f, 0.165f}, 16, 24);
-        MeshData shell;
-        shell.vertices = hood.vertices;
-        // The face opening: no triangle whose corners all look forward below the brow.
-        for (std::size_t i = 0; i + 2 < hood.indices.size(); i += 3) {
-            bool open = true;
-            for (int k = 0; k < 3; ++k) {
-                const glm::vec3 p = glm::normalize(hood.vertices[hood.indices[i + std::size_t(k)]].position);
-                open = open && p.z > 0.6f && p.y < 0.4f && p.y > -0.62f;
-            }
-            if (!open)
-                shell.indices.insert(shell.indices.end(), {hood.indices[i], hood.indices[i + 1], hood.indices[i + 2]});
-        }
-        solid(out, shell, glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(0.0f, 0.012f, -0.012f)), look.hood,
-              kHead);
-        // The tip: a tube along a curve up and back, tapering to a point.
-        const int n = 10;
-        const float tipLength = look.longHood ? 1.0f : 0.55f;
-        std::vector<glm::vec3> spine;
-        for (int i = 0; i <= n; ++i) {
-            const float t = float(i) / float(n);
-            spine.push_back(headCentre + glm::vec3(0.0f, 0.11f + 0.07f * t - 0.1f * t * t * tipLength,
-                                                   -0.07f - 0.2f * t * tipLength));
-        }
-        MeshData tip;
-        const int sides = 10;
-        for (int i = 0; i <= n; ++i) {
-            const glm::vec3 dir =
-                glm::normalize(spine[std::size_t(std::min(i + 1, n))] - spine[std::size_t(std::max(i - 1, 0))]);
-            const glm::mat4 frame = alignY(dir);
-            const float t = float(i) / float(n);
-            const float r = 0.075f * (1.0f - t) * (1.0f - 0.3f * t) + 0.004f;
-            for (int s = 0; s <= sides; ++s) {
-                const float a = kTau * float(s) / float(sides);
-                const glm::vec3 offset =
-                    glm::vec3(frame * glm::vec4(std::cos(a) * r, 0.0f, std::sin(a) * r * 0.8f, 0.0f));
-                tip.vertices.push_back(
-                    {.position = spine[std::size_t(i)] + offset,
-                     .color = glm::vec4(glm::mix(look.hood, look.cape, 0.35f * smoothstep(0.2f, 0.8f, t)), 1.0f)});
-            }
-        }
-        for (int i = 0; i < n; ++i)
-            for (int s = 0; s < sides; ++s) {
-                const auto a = std::uint32_t(i * (sides + 1) + s);
-                const auto b = a + std::uint32_t(sides + 1);
-                tip.indices.insert(tip.indices.end(), {a, b, b + 1, a, b + 1, a + 1});
-            }
-        computeNormals(tip);
-        add(out, tip, [](const Vertex&) { return rigid(kHead); });
+        solid(out, ellipsoid({0.003f, 0.004f, 0.002f}, 6, 8),
+              glm::translate(glm::mat4(1.0f), headCentre + glm::vec3(side * 0.028f - 0.002f, -0.002f, 0.15f)),
+              look.hood, kHead);
     }
+    {
+        constexpr int rings = 28, sides = 48;
+        MeshData hood;
+        const auto hoodPoint = [&](float theta, float phi) {
+            glm::vec3 p(0.16f * std::sin(theta) * std::cos(phi), 0.165f * std::sin(theta) * std::sin(phi),
+                        0.16f * std::cos(theta));
+            const float crown = std::pow(std::max(0.0f, p.y / 0.165f), 5.0f);
+            const float folds = 0.004f * std::sin(phi * 5.0f + theta * 2.0f) * (1.0f - crown);
+            p.x += std::cos(phi) * folds;
+            p.y += std::sin(phi) * folds + crown * 0.055f;
+            p.z -= crown * (look.longHood ? 0.095f : 0.045f);
+            return p;
+        };
+        // Rings start at the face opening; no discarded triangles or jagged cut edge.
+        for (int r = 0; r <= rings; ++r) {
+            const float t = float(r) / rings;
+            const float theta = glm::mix(0.76f, kPi - 0.001f, t);
+            for (int c = 0; c <= sides; ++c) {
+                const float phi = float(c) / sides * kTau;
+                hood.vertices.push_back(
+                    {.position = hoodPoint(theta, phi),
+                     .color = glm::vec4(
+                         glm::mix(glm::vec3(0.88f, 0.90f, 0.94f), glm::vec3(1.0f), smoothstep(0.0f, 0.2f, t)), 1.0f)});
+            }
+        }
+        for (int r = 0; r < rings; ++r)
+            for (int c = 0; c < sides; ++c) {
+                const auto a = std::uint32_t(r * (sides + 1) + c), b = a + sides + 1;
+                hood.indices.insert(hood.indices.end(), {a, b, a + 1, a + 1, b, b + 1});
+            }
+        computeNormals(hood);
+        for (int r = 0; r <= rings; ++r) {
+            auto& a = hood.vertices[std::size_t(r * (sides + 1))];
+            auto& b = hood.vertices[std::size_t(r * (sides + 1) + sides)];
+            a.normal = b.normal = glm::normalize(a.normal + b.normal);
+        }
+        // Rolled cloth around the aperture gives the hood a visible thickness.
+        MeshData rim;
+        constexpr int cross = 8;
+        for (int c = 0; c <= sides; ++c) {
+            const float phi = float(c) / sides * kTau;
+            const glm::vec3 centre = hoodPoint(0.76f, phi);
+            for (int j = 0; j <= cross; ++j) {
+                const float a = float(j) / cross * kTau;
+                rim.vertices.push_back(
+                    {.position = centre + 0.007f * glm::vec3(std::cos(phi) * std::cos(a), std::sin(phi) * std::cos(a),
+                                                             std::sin(a))});
+            }
+        }
+        for (int c = 0; c < sides; ++c)
+            for (int j = 0; j < cross; ++j) {
+                const auto a = std::uint32_t(c * (cross + 1) + j), b = a + cross + 1;
+                rim.indices.insert(rim.indices.end(), {a, b, a + 1, a + 1, b, b + 1});
+            }
+        computeNormals(rim);
+        const auto placement = glm::translate(glm::mat4(1.0f), headCentre);
+        solid(out, hood, placement, look.hood, kHead);
+        solid(out, rim, placement, look.hood, kHead);
+    }
+    // A padded ivory collar, with a small bronze clasp at the front.
+    solid(out, lathe({{0.052f, 0.63f}, {0.079f, 0.64f}, {0.082f, 0.665f}, {0.06f, 0.69f}}, 32), glm::mat4(1.0f),
+          look.hood, kNeck);
+    solid(out, ellipsoid({0.018f, 0.024f, 0.008f}, 10, 12),
+          glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.635f, 0.089f)), srgb(198, 155, 85), kChest);
     // Legs, boots, arms (the tunic's sleeves) and hands.
     for (const int side : {0, 1}) {
         const int up = side == 0 ? kLUpLeg : kRUpLeg;
-        limb(out, kRest[std::size_t(up)], kRest[std::size_t(up + 1)], 0.03f, 0.023f, look.legs, up, kHips, up + 1);
-        limb(out, kRest[std::size_t(up + 1)], kRest[std::size_t(up + 2)], 0.023f, 0.019f, look.legs, up + 1, up,
+        limb(out, kRest[std::size_t(up)], kRest[std::size_t(up + 1)], 0.038f, 0.03f, look.body, up, kHips, up + 1);
+        limb(out, kRest[std::size_t(up + 1)], kRest[std::size_t(up + 2)], 0.03f, 0.025f, look.boots, up + 1, up,
              up + 2);
-        solid(out, ellipsoid({0.03f, 0.026f, 0.052f}, 8, 12),
+        solid(out, ellipsoid({0.037f, 0.031f, 0.063f}, 12, 18),
               glm::translate(glm::mat4(1.0f), kRest[std::size_t(up + 2)] + glm::vec3(0.0f, -0.02f, 0.02f)), look.boots,
               up + 2);
         const int arm = side == 0 ? kLArm : kRArm;
-        limb(out, kRest[std::size_t(arm)], kRest[std::size_t(arm + 1)], 0.027f, 0.023f, look.body, arm, kChest,
+        limb(out, kRest[std::size_t(arm)], kRest[std::size_t(arm + 1)], 0.037f, 0.031f, look.body, arm, kChest,
              arm + 1);
-        limb(out, kRest[std::size_t(arm + 1)], kRest[std::size_t(arm + 2)], 0.023f, 0.02f, look.body, arm + 1, arm,
+        limb(out, kRest[std::size_t(arm + 1)], kRest[std::size_t(arm + 2)], 0.031f, 0.027f, look.body, arm + 1, arm,
              arm + 2);
-        solid(out, ellipsoid({0.022f, 0.027f, 0.02f}, 6, 10),
+        solid(out, ellipsoid({0.026f, 0.033f, 0.024f}, 12, 16),
               glm::translate(glm::mat4(1.0f), kRest[std::size_t(arm + 2)] + glm::vec3(0.0f, -0.018f, 0.0f)), look.face,
               arm + 2);
     }
-    // The cape: a grid three times finer than its joints, each vertex weighted bilinearly to the four joints
+    // The cape: a grid five times finer than its joints, each vertex weighted bilinearly to the four joints
     // around it. uv: (2 + across, down), which the character surface reads as the cape (its marks and inner side).
     {
-        constexpr int kSub = 3;
+        constexpr int kSub = 5;
         constexpr int cols = (kCapeCols - 1) * kSub + 1;
         constexpr int rows = (kCapeRows - 1) * kSub + 1;
         MeshData cape;
@@ -226,9 +246,13 @@ CharacterMesh Character::buildMesh(const CharacterLook& look) {
             for (int c = 0; c < cols; ++c) {
                 const float u = float(c) / float(cols - 1);
                 const float v = float(r) / float(rows - 1);
-                cape.vertices.push_back({.position = capeRest(u, v, look.capeLength),
-                                         .uv = {2.0f + u, v},
-                                         .color = glm::vec4(look.cape, 1.0f)});
+                glm::vec3 cloth = capeRest(u, v, look.capeLength);
+                // Broad cloth folds carried by the skin, independent of the coarser simulation cage.
+                const float a = (u - 0.5f) * glm::mix(5.0f, 4.5f, std::sqrt(v));
+                const float fold = 0.018f * std::sin(u * kTau * 3.0f + v * 0.7f) * std::pow(v, 0.65f);
+                cloth += glm::vec3(-std::sin(a), 0.0f, -std::cos(a)) * fold;
+                cloth.y += 0.014f * std::cos(u * kTau * 3.0f) * v * v;
+                cape.vertices.push_back({.position = cloth, .uv = {2.0f + u, v}, .color = glm::vec4(look.cape, 1.0f)});
                 const float gu = u * float(kCapeCols - 1), gv = v * float(kCapeRows - 1);
                 const int c0 = std::min(int(gu), kCapeCols - 2), r0 = std::min(int(gv), kCapeRows - 2);
                 const float fu = gu - float(c0), fv = gv - float(r0);

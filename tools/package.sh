@@ -66,8 +66,8 @@ done
 ICONSET="$(mktemp -d -t cloudsong_icon)/Cloudsong.iconset"
 mkdir -p "$ICONSET"
 for size in 16 32 128 256 512; do
-    sips -s format png -z $size $size "$ROOT/icon/icon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-    sips -s format png -z $((size * 2)) $((size * 2)) "$ROOT/icon/icon.png" \
+    sips -s format png -z $size $size "$ROOT/icon/cloudsong-daylight.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    sips -s format png -z $((size * 2)) $((size * 2)) "$ROOT/icon/cloudsong-daylight.png" \
         --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Cloudsong.icns"

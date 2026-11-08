@@ -39,9 +39,9 @@ struct Budget {
 
 Budget budgetOf(Quality q) {
     switch (q) {
-    case Quality::High: return {3, 0.35f, 4, 2, 5.0f, 384, 512, 480.0f, 1.0f, true};
-    case Quality::Medium: return {3, 0.25f, 4, 2, 3.0f, 256, 320, 300.0f, 0.65f, true};
-    case Quality::Low: return {2, 0.15f, 3, 1, 2.0f, 128, 192, 170.0f, 0.4f, false};
+    case Quality::High: return {3, 0.35f, 4, 2, 1.0f, 384, 512, 480.0f, 1.0f, true};
+    case Quality::Medium: return {3, 0.25f, 4, 2, 0.7f, 256, 320, 300.0f, 0.65f, true};
+    case Quality::Low: return {2, 0.15f, 3, 1, 0.5f, 128, 192, 170.0f, 0.4f, false};
     }
     return budgetOf(Quality::High);
 }
@@ -120,13 +120,15 @@ quench::Result<void> Particles::create(render::Scene& scene, const World& world,
                                                                          .seed = 7,
                                                                          .rate = 0.0f,
                                                                          .lifetime = {3.5f, 6.0f},
-                                                                         .speed = {0.0f, 0.06f},
+                                                                         .speed = {0.025f, 0.055f},
                                                                          .spread = kPi,
-                                                                         .size = {0.03f, 0.065f},
-                                                                         .noise = 0.06f,
+                                                                         .size = {0.018f, 0.035f},
+                                                                         .drag = 0.8f,
+                                                                         .noise = 0.045f,
                                                                          .noiseScale = 3.0f,
-                                                                         .wind = 0.1f,
-                                                                         .color = glm::vec3(2.1f, 1.8f, 1.2f),
+                                                                         .noiseRate = 0.07f,
+                                                                         .wind = 0.01f,
+                                                                         .color = glm::vec3(1.25f, 1.05f, 0.65f),
                                                                          .colorOverLife = fadeInOut(0.2f, 0.75f),
                                                                          .brightnessVariation = 0.6f,
                                                                          .twinkle = 0.55f,
@@ -134,7 +136,7 @@ quench::Result<void> Particles::create(render::Scene& scene, const World& world,
                                                                          .twinkleSharpness = 2.0f,
                                                                          .softness = 0.15f,
                                                                          .nearFade = 1.5f,
-                                                                         .minPixels = 1.1f});
+                                                                         .minPixels = 0.75f});
     if (!field) return quench::Error{field.error()};
     m_field = *field;
 
@@ -305,13 +307,13 @@ void Particles::buildWings(render::Scene& scene) {
                                                                             .speed = {0.1f, 0.5f},
                                                                             .spread = kPi,
                                                                             .inherit = 0.08f,
-                                                                            .size = {0.025f, 0.05f},
+                                                                            .size = {0.012f, 0.025f},
                                                                             .gravity = glm::vec3(0.0f, -0.35f, 0.0f),
                                                                             .drag = 1.2f,
                                                                             .noise = 0.3f,
                                                                             .noiseScale = 1.5f,
                                                                             .wind = 0.3f,
-                                                                            .color = glm::vec3(3.2f, 1.7f, 0.45f),
+                                                                            .color = glm::vec3(0.8f, 0.5f, 0.2f),
                                                                             .colorOverLife = fadeInOut(0.05f, 0.45f),
                                                                             .brightnessVariation = 0.5f,
                                                                             .twinkle = 0.7f,
@@ -319,53 +321,39 @@ void Particles::buildWings(render::Scene& scene) {
                                                                             .sprite = Sprite::Star,
                                                                             .softness = 0.05f,
                                                                             .nearFade = 0.3f,
-                                                                            .minPixels = 1.5f});
+                                                                            .minPixels = 0.75f});
     if (sparkles) m_wingSparkles = *sparkles;
-    // The strips last 1.4 s and at most 10 m (a fast flap's), so that their tails always thin and fade out. The band
-    // is the cape's orange going to gold, wide near the cape and narrowing; most of it is gone by half its life. It
-    // and its haze fade in just behind the cape (the head's glow starts the ribbon): seen from behind, the first of
-    // the strip comes toward the camera over the cape.
+    // Long translucent ribbons keep their gesture without washing out the night sky.
+    // The engine's cross-strip profile is 1 at the axis and 0 at either edge.
+    // Both layers add light; a narrow core defines the line, with a faint surrounding glow.
     TrailDesc body{.lifetime = 1.4f,
-                   .spacing = 0.25f,
-                   .maxPoints = 64,
+                   .spacing = 0.12f,
+                   .maxPoints = 128,
                    .maxLength = 10.0f,
                    .subdivisions = b.subdivisions,
-                   .width = 0.55f,
-                   .widthOverAge = {{0.0f, 0.4f}, {0.06f, 1.0f}, {0.4f, 0.65f}, {1.0f, 0.1f}},
-                   .color = glm::vec3(2.2f, 0.8f, 0.18f),
-                   .opacity = 0.9f,
-                   .colorOverAge = {{0.0f, glm::vec4(1.3f, 1.4f, 1.4f, 0.0f)},
-                                    {0.08f, glm::vec4(1.2f, 1.3f, 1.3f, 1.0f)},
+                   .width = 0.24f,
+                   .widthOverAge = {{0.0f, 0.4f}, {0.06f, 1.0f}, {0.4f, 0.65f}, {1.0f, 0.0f}},
+                   .color = glm::vec3(0.45f, 0.28f, 0.1f),
+                   .opacity = 0.055f,
+                   .colorOverAge = {{0.0f, glm::vec4(1.0f, 1.0f, 1.0f, 0.0f)},
+                                    {0.08f, glm::vec4(1.0f)},
                                     {0.2f, glm::vec4(1.0f, 1.0f, 1.0f, 0.8f)},
-                                    {0.5f, glm::vec4(0.9f, 1.0f, 1.1f, 0.45f)},
-                                    {1.0f, glm::vec4(0.8f, 0.9f, 1.1f, 0.0f)}},
-                   .blend = Blend::Alpha,
+                                    {0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 0.45f)},
+                                    {1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 0.0f)}},
+                   .blend = Blend::Additive,
                    .softness = 0.1f,
-                   .minPixels = 1.5f};
-    TrailDesc glow = body;
-    glow.width = 0.1f;
-    glow.widthOverAge = {{0.0f, 0.8f}, {0.05f, 1.0f}, {0.25f, 0.5f}, {0.5f, 0.0f}};
-    glow.color = glm::vec3(2.6f, 1.4f, 0.4f);
-    glow.opacity = 1.0f;
-    glow.colorOverAge = {{0.0f, glm::vec4(1.6f, 1.6f, 1.6f, 1.0f)},
-                         {0.1f, glm::vec4(1.1f, 1.1f, 1.1f, 0.8f)},
-                         {0.25f, glm::vec4(0.8f, 0.8f, 0.85f, 0.3f)},
-                         {0.5f, glm::vec4(0.7f, 0.7f, 0.8f, 0.0f)}};
-    glow.headSize = 0.14f;
-    glow.headColor = glm::vec3(3.4f, 1.9f, 0.6f);
-    glow.blend = Blend::Additive;
-    glow.minPixels = 1.2f;
-    TrailDesc halo = body;
-    halo.width = 1.0f;
-    halo.widthOverAge = {{0.0f, 0.5f}, {0.08f, 1.0f}, {0.5f, 0.7f}, {1.0f, 0.2f}};
-    halo.color = glm::vec3(2.0f, 1.0f, 0.25f);
-    halo.opacity = 0.22f;
-    halo.softness = 0.5f;
-    halo.minPixels = 1.0f;
+                   .minPixels = 0.75f};
+    TrailDesc core = body;
+    core.width = 0.010f;
+    core.color = glm::vec3(0.9f, 0.65f, 0.3f);
+    core.opacity = 0.2f;
+    core.minPixels = 0.6f;
+    m_wingCoreDesc = core;
+    m_wingDesc = body;
+    m_wingDaylight = -1.0f;
     for (int i = 0; i < b.wings; ++i) {
-        Wing wing{.trails = {scene.addTrail(body), scene.addTrail(glow)}};
+        Wing wing{.trails = {scene.addTrail(body), scene.addTrail(core)}};
         if (sparkles) scene.setTrailSparkles(wing.trails[1], m_wingSparkles, b.wingSparkles);
-        if (b.halos) wing.trails.push_back(scene.addTrail(halo));
         for (const render::TrailId t : wing.trails) scene.setTrailEmitting(t, false);
         m_wings.push_back(std::move(wing));
     }
@@ -521,6 +509,20 @@ void Particles::update(render::Scene& scene, const World& world, const Frame& f)
     m_eye = f.eye;
     updateGuide(scene, f);
 
+    // Add enough light to read over sunlit grass; keep the restrained night radiance.
+    const float daylight = 1.0f - std::clamp(f.dusk, 0.0f, 1.0f);
+    if (std::abs(daylight - m_wingDaylight) > 0.001f) {
+        TrailDesc desc = m_wingDesc;
+        desc.color *= glm::mix(1.0f, 8.0f, daylight);
+        TrailDesc core = m_wingCoreDesc;
+        core.color *= glm::mix(1.0f, 6.0f, daylight);
+        for (const Wing& wing : m_wings) {
+            scene.setTrail(wing.trails[0], desc);
+            scene.setTrail(wing.trails[1], core);
+        }
+        m_wingDaylight = daylight;
+    }
+
     // The cape's ribbons: on while flying (kept through the moment between a flap and a glide), fading out over
     // their life after landing.
     const bool jump = f.jump || !m_started;
@@ -537,7 +539,7 @@ void Particles::update(render::Scene& scene, const World& world, const Frame& f)
         for (const render::TrailId t : m_wings[i].trails) scene.moveTrail(t, tips[i], f.time, jump);
     if (f.flapped) {
         // A flap scatters a puff of sparkles from the cape.
-        std::array<glm::vec3, 24> puff;
+        std::array<glm::vec3, 8> puff;
         for (std::size_t i = 0; i < puff.size(); ++i) {
             const float t = float(i) / float(puff.size());
             puff[i] = glm::mix(f.capeLeft, f.capeRight, t) +
@@ -562,7 +564,7 @@ float Particles::fieldDensity(const World& world, glm::vec2 at) const {
         if (t >= 1.0f) continue;
         // The flower fields are World's: the same noise.
         const float field = fbm(at / 7.0f, 2, isle.desc.seed + 31) * 0.5f + 0.5f;
-        const float flowers = std::min(isle.desc.flowers, 1.0f) * smoothstep(0.52f, 0.72f, field);
+        const float flowers = std::min(isle.desc.flowers, 1.0f) * smoothstep(0.63f, 0.78f, field);
         density = std::max(density, std::max(0.45f * flowers, 0.3f * smoothstep(0.84f, 0.97f, t)));
         break;
     }

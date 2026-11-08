@@ -140,27 +140,46 @@ MenuAction Menus::settingsPanel(Settings& settings) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const float s = scale();
     const float width = std::min(520.0f * s, vp->Size.x * 0.9f);
-    const float height = std::min(440.0f * s, vp->Size.y * 0.86f);
+    const float height = std::min(650.0f * s, vp->Size.y * 0.9f);
     const ImVec2 at((vp->Size.x - width) * 0.5f, std::max((vp->Size.y - height) * 0.62f, vp->Size.y * 0.07f));
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(vp->Pos.x + at.x, vp->Pos.y + at.y),
                                               ImVec2(vp->Pos.x + at.x + width, vp->Pos.y + at.y + height),
-                                              IM_COL32(38, 30, 44, 150), 16.0f * s);
+                                              IM_COL32(38, 34, 46, 220), 16.0f * s);
+    const float headerBottom = at.y + 76.0f * s;
+    const float footerTop = at.y + height - 88.0f * s;
+    for (const float y : {headerBottom, footerTop})
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(vp->Pos.x + at.x, vp->Pos.y + y),
+                                            ImVec2(vp->Pos.x + at.x + width, vp->Pos.y + y),
+                                            IM_COL32(245, 226, 192, 65), std::max(1.0f, s));
+    m_settingsPoints.clear();
+    auto remember = [&](const char* name) {
+        if (!ImGui::IsItemVisible()) return;
+        const ImVec2 lo = ImGui::GetItemRectMin(), hi = ImGui::GetItemRectMax();
+        m_settingsPoints[name] = {(lo.x + hi.x) * 0.5f - vp->Pos.x, (lo.y + hi.y) * 0.5f - vp->Pos.y};
+    };
     MenuAction action = MenuAction::None;
     pushButtonStyle(s);
     ImGui::SetCursorPos(ImVec2(at.x + 28.0f * s, at.y + 22.0f * s));
-    ImGui::BeginGroup();
-    const float inner = width - 56.0f * s;
     pushFont(m_font, 30.0f * s);
     ImGui::TextColored(kText, "Settings");
     ImGui::PopFont();
+    ImGui::SetCursorPos(ImVec2(at.x + 28.0f * s, headerBottom));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(1.0f, 0.86f, 0.6f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, ImVec4(1.0f, 0.9f, 0.7f, 0.9f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, ImVec4(1.0f, 0.95f, 0.8f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 10.0f * s);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 5.0f * s);
+    ImGui::BeginChild("Settings controls", ImVec2(width - 36.0f * s, footerTop - headerBottom));
     pushFont(m_font, 21.0f * s);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f * s, 8.0f * s));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f * s, 10.0f * s));
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 22.0f * s);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f * s);
-    ImGui::Dummy(ImVec2(0.0f, 2.0f * s));
+    ImGui::Dummy(ImVec2(0.0f, 12.0f * s));
     ImGui::TextColored(kText, "Picture");
-    const float third = (inner - 20.0f * s) / 3.0f;
+    const float controlsWidth = ImGui::GetContentRegionAvail().x - 12.0f * s;
+    const float third = (controlsWidth - 20.0f * s) / 3.0f;
     const Quality levels[] = {Quality::Low, Quality::Medium, Quality::High};
     const char* labels[] = {"Light", "Balanced", "Beautiful"};
     for (int i = 0; i < 3; ++i) {
@@ -175,8 +194,8 @@ MenuAction Menus::settingsPanel(Settings& settings) {
     }
     auto slider = [&](const char* label, const char* id, float& value, float lo, float hi, const char* format) {
         ImGui::TextColored(kText, "%s", label);
-        ImGui::SameLine(inner * 0.36f);
-        ImGui::SetNextItemWidth(inner * 0.64f);
+        ImGui::SameLine(controlsWidth * 0.36f);
+        ImGui::SetNextItemWidth(controlsWidth * 0.64f);
         if (ImGui::SliderFloat(id, &value, lo, hi, format, ImGuiSliderFlags_AlwaysClamp))
             action = MenuAction::SettingsChanged;
     };
@@ -188,13 +207,35 @@ MenuAction Menus::settingsPanel(Settings& settings) {
     settings.effects = effects / 100.0f;
     slider("Camera speed", "##look", settings.lookSpeed, 0.25f, 3.0f, "%.2f");
     ImGui::TextColored(kText, "Invert camera");
-    ImGui::SameLine(inner * 0.36f);
+    ImGui::SameLine(controlsWidth * 0.36f);
     if (ImGui::Checkbox("##invert", &settings.invertLook)) action = MenuAction::SettingsChanged;
+    ImGui::Separator();
+    ImGui::TextColored(kText, "Day / night cycle");
+    ImGui::SameLine(controlsWidth * 0.56f);
+    if (ImGui::Checkbox("##day_cycle", &settings.dayNightCycle)) action = MenuAction::SettingsChanged;
+    remember("day_cycle_toggle");
+    slider("Time of day", "##day_hour", settings.timeOfDay, 0.0f, 23.99f, "%.2f h");
+    slider("Day length", "##day_length", settings.dayLengthMinutes, 1.0f, 60.0f, "%.0f min");
+    const char* times[] = {"Morning", "Noon", "Evening"};
+    const float hours[] = {8.0f, 12.0f, 17.5f};
+    const char* names[] = {"morning", "noon", "evening"};
+    for (int i = 0; i < 3; ++i) {
+        if (i > 0) ImGui::SameLine();
+        if (ImGui::Button(times[i], ImVec2(third, 44.0f * s))) {
+            settings.timeOfDay = hours[i];
+            action = MenuAction::SettingsChanged;
+        }
+        remember(names[i]);
+    }
+    ImGui::Dummy(ImVec2(0.0f, 12.0f * s));
     ImGui::PopStyleVar(4);
     ImGui::PopFont();
-    ImGui::EndGroup();
-    ImGui::SetCursorPosY(at.y + height - 76.0f * s);
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(4);
+    ImGui::SetCursorPosY(footerTop + 22.0f * s);
     if (button("Back", 200.0f * s, s)) m_settings = false;
+    remember("settings_back");
     popButtonStyle();
     return action;
 }

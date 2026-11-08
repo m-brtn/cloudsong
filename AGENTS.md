@@ -26,6 +26,7 @@ Changes that can behave differently on a phone: run on the device, or ask the us
 
 The checks (`ctest`, all offscreen, their files in `build/<preset>/captures/`): `smoke` (keys move and jump), `flight`
 (glide and flap between isles), `journey` (the whole way, candles, spirits on the navmesh, the updraft, the end),
+`settings` (saved preferences and compatibility), `daylight` (frozen/running time, midnight, pause and settings),
 `sound` (the mix measured: levels, the call's pitch, footsteps, no clipping), `guide` (the call's guide: none before
 a call, then toward the next goal, lingering, gone after its fade, one at a time, circling at the goal; the particles
 and trails per picture setting in its log), `front` (the title, resting, the
@@ -40,7 +41,9 @@ before and after a change in the same session, not frame rates on a display).
 Game scenario commands (besides the engine's): `teleport X Y Z [YAW]`, `camera YAW PITCH DIST`, `orbit DYAW PITCH
 DIST`, `aim X Z`, `view EX EY EZ TX TY TZ` / `view off`, `move X Y`, `jump down|up`, `call`, `light I`, `clouds
 layer|off|volumetric`, `quality low|medium|high`, `screen title|play|pause|settings`, `touch_controls on|off`,
-`mood KEY VALUES` (the light, sky and haze, for tuning), `debug_ui on|off`. Values: `x y z grounded glide energy
+`time_of_day HOUR`, `day_cycle on|off`, `day_length MINUTES`,
+`mood KEY VALUES` (the light, sky and haze, for tuning; fog is a tint of the daylight fog), `debug_ui on|off`. Settings scenario points: `@morning`, `@noon`, `@evening`, `@day_cycle_toggle`, `@settings_back`
+(visible controls only; scroll first when needed). Values: `settings_open time_of_day day_cycle sun_elevation x y z grounded glide energy
 max_energy lights candles warm awake walking seated nav_ready updraft ending screen quality render_scale altar_dist
 candle_dist spirit_far vx vy cape_up cape_back glow_draws particles particle_systems trails wing_trail guide
 guide_dist guide_goal` (`particles` and `trails` as the renderer drew them; `wing_trail` 1 while the cape's ribbons
@@ -54,7 +57,8 @@ next goal, into the cave through its mouth, linger and fade; with the goal at ha
 sparse twinkling points round the camera over the flower fields, round the lanterns, along the isles' rims and in the
 cave (denser as the sun goes down); a few motes in the beam, the open updraft and the cave. Their counts follow the
 picture setting. The glow pass (`src/Glow.h`) draws the beams, the call's ring, the drifting lights, the small
-creatures by every other light until it is gathered, and halos.
+creatures by every other light until it is gathered. Lanterns and candles use emissive flame meshes with bloom
+and local illumination, without large sprite halos.
 
 Packages: `tools/package.sh` (Release, ctest, `dist/Cloudsong-<version>-<hash>-macos.zip`, a smoke run from the
 unzipped app); `--ios` also builds the iOS app signed by a paid team (`--team ID` or `QUENCH_IOS_TEAM`, never written

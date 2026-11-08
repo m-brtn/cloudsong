@@ -32,7 +32,7 @@ quench_weather_sounds(cloudsong_weather_sounds)
 quench_add_game(cloudsong
     NAME "Cloudsong"
     BUNDLE_ID org.quench.cloudsong
-    ICON icon/icon.png
+    ICON icon/cloudsong-daylight.png
     ASSETS assets
     COOKED_ASSETS cloudsong_weather_sounds
     ORIENTATIONS landscape
@@ -52,12 +52,19 @@ quench_add_shaders(cloudsong NAME glow SOURCE shaders/glow.hlsl ENTRIES glow_vs:
 
 if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
+    add_executable(cloudsong_settings_tests tests/Settings.cpp src/Settings.cpp)
+    target_include_directories(cloudsong_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(cloudsong_settings_tests PRIVATE quench_core)
+    add_test(NAME settings COMMAND cloudsong_settings_tests)
     # Scripted offscreen runs; their captures and user files go to the build's captures/, never to the player's.
     set(capture_dir ${CMAKE_CURRENT_BINARY_DIR}/captures)
     foreach(check smoke flight journey sound guide)
         add_test(NAME ${check} COMMAND cloudsong --window 640x360 --user-dir ${capture_dir}
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/${check}.txt)
     endforeach()
+    add_test(NAME daylight COMMAND cloudsong --window 1280x720 --frame-size 1280x720 --user-dir ${capture_dir}
+             --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/daylight.txt)
+    set_tests_properties(daylight PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
     # The touch controls' places are in window points: a 1280x720 window.
     add_test(NAME front COMMAND cloudsong --window 1280x720 --frame-size 640x360 --user-dir ${capture_dir}
              --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/front.txt)

@@ -52,9 +52,7 @@ public:
     float guideDistance() const;
 
 private:
-    // A ribbon from the cape, trails that follow one point: a warm band, alpha-blended so that its colour holds
-    // against a bright sky; the light along its middle with the glowing head at the cape (additive, it sheds the
-    // sparkles); on the finer settings a wide faint glow round them.
+    // A narrow light core and faint surrounding glow, with sparse sparkles.
     struct Wing {
         std::vector<quench::render::TrailId> trails;
     };
@@ -90,6 +88,8 @@ private:
     std::vector<glm::vec3> m_guideAt; // the heads' places before their weave
 
     std::vector<Wing> m_wings;
+    quench::particles::TrailDesc m_wingDesc, m_wingCoreDesc;
+    float m_wingDaylight = -1.0f;
     quench::render::ParticleSystemId m_wingSparkles;
     bool m_emitting = false;
     float m_sinceFlight = 0.0f; // s since the figure last flew

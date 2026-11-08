@@ -1,0 +1,78 @@
+# Frozen lighting, running clock, pause, midnight wrap and the settings panel.
+time_of_day 12
+day_cycle off
+wait 0.5
+expect sun_elevation > 59
+mark time_of_day
+wait 0.5
+expect d_time_of_day == 0
+capture daylight/noon.png
+
+day_length 1
+time_of_day 23.9
+day_cycle on
+wait 0.5
+expect time_of_day < 1
+expect sun_elevation < -59
+day_cycle off
+capture daylight/night.png
+mark time_of_day
+wait 0.3
+expect d_time_of_day == 0
+
+time_of_day 8
+wait 0.5
+capture daylight/morning.png
+time_of_day 17.5
+wait 0.5
+capture daylight/evening.png
+
+day_cycle on
+screen pause
+mark time_of_day
+wait 0.3
+expect d_time_of_day == 0
+screen play
+wait 0.3
+expect d_time_of_day > 0.1
+day_cycle off
+screen settings
+wait 0.3
+expect imgui_id_conflicts == 0
+capture daylight/settings.png
+# Exercise the actual controls after scrolling them into view.
+mouse 640 300
+wheel -20
+wait 0.3
+click @noon
+wait 0.1
+expect time_of_day == 12
+click @morning
+wait 0.1
+expect time_of_day == 8
+click @evening
+wait 0.1
+expect time_of_day == 17.5
+click @day_cycle_toggle
+wait 0.1
+expect day_cycle == 1
+mark time_of_day
+wait 0.2
+expect d_time_of_day == 0
+click @day_cycle_toggle
+wait 0.1
+expect day_cycle == 0
+touch_controls on
+resize 844 390
+wait 0.3
+expect imgui_id_conflicts == 0
+capture daylight/settings_compact.png
+mouse 420 180
+wheel -20
+wait 0.3
+capture daylight/settings_scrolled.png
+click @settings_back
+wait 0.1
+expect settings_open == 0
+expect imgui_id_conflicts == 0
+quit

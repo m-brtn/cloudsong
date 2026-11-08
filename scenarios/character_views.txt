@@ -1,0 +1,36 @@
+# Character art review: fixed angles and representative poses, hidden captures at the requested frame size.
+day_cycle off
+time_of_day 10
+wait 1
+view 3.1 1.9 -34.1 2 1.45 -36
+wait .5
+capture character/front.png
+view 4 1.7 -36 2 1.5 -36
+wait .5
+capture character/side.png
+view 2 1.8 -38.2 2 1.45 -36
+wait .5
+capture character/back.png
+view 3.1 1.9 -34.1 2 1.45 -36
+call
+wait .2
+capture character/call.png
+view off
+teleport -40 30 70 -.5
+camera -.5 .2 3
+move 0 1
+jump down
+wait .5
+capture character/glide.png
+jump up
+wait .05
+jump down
+wait .15
+capture character/flap.png
+jump up
+teleport 2 1 -36 0
+wait .5
+move 0 1
+wait .25
+capture character/run.png
+quit
