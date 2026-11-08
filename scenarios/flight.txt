@@ -16,6 +16,10 @@ jump up
 wait 0.05
 jump down
 until glide > 0.5 2
+# The cape's ribbons while gliding; the streams of light and the meadow's points are drawn.
+expect wing_trail == 1
+expect trails > 2
+expect particles > 100
 until grounded == 1 4
 expect lights == 1
 expect max_energy == 3
@@ -24,6 +28,7 @@ expect z > 38
 move 0 0
 jump up
 wait 0.5
+expect wing_trail == 0
 # A flap in place spends a mark; the lantern warms it back.
 jump down
 wait 0.3

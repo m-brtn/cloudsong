@@ -5,6 +5,7 @@
 #include "Front.h"
 #include "Glow.h"
 #include "Journey.h"
+#include "Particles.h"
 #include "Physics.h"
 #include "Player.h"
 #include "Settings.h"
@@ -175,6 +176,8 @@ public:
             !spirits)
             return Error{spirits.error()};
         m_sound.init(app.audio());
+        if (Result<void> particles = m_particles.create(*m_scene, m_world, m_settings.quality); !particles)
+            return Error{particles.error()};
 
         m_sun = m_scene->addLight({.type = render::LightType::Directional});
         applyMood();
@@ -271,7 +274,10 @@ public:
         m_player.step(float(dt), in, *m_physics);
         m_current = m_player.position();
         const glm::vec3 feet = m_current - glm::vec3(0.0f, kAltitude, 0.0f);
-        if (m_player.flapped()) m_sound.flap();
+        if (m_player.flapped()) {
+            m_sound.flap();
+            m_flapPending = true;
+        }
         if (m_player.jumped()) m_sound.jump();
         if (m_player.landed()) m_sound.land(m_world.groundAt(feet), fall);
         const bool called =
@@ -308,6 +314,7 @@ public:
             m_player.teleport(m_safe + glm::vec3(0.0f, 0.3f, 0.0f), m_safeYaw);
             m_previous = m_current = m_player.position();
             m_figure.resetCape();
+            m_trailJump = true;
         }
     }
 
@@ -385,6 +392,27 @@ public:
         m_weather.update(frameDt);
         m_scene->setWeather(m_weather);
         m_world.updateDetail(*m_scene, eye());
+        {
+            // The cape's ribbons while flying or gliding, the streams of light, the meadow's twinkling field.
+            Particles::Frame pf;
+            pf.time = double(m_time);
+            pf.dt = dt;
+            pf.eye = eye();
+            pf.capeLeft = m_figure.capeSurface({0.02f, 0.97f}).first;
+            pf.capeRight = m_figure.capeSurface({0.98f, 0.97f}).first;
+            pf.capeCentre = m_figure.capeSurface({0.5f, 0.97f}).first;
+            pf.velocity = m_player.velocity();
+            // Gliding or carried up by a flap, not a fall.
+            pf.flying = m_screen == Screen::Playing && !m_player.grounded() &&
+                        (m_player.glide() > 0.2f || m_player.flap() > 0.0f);
+            pf.flapped = m_flapPending;
+            pf.jump = m_trailJump;
+            pf.updraft = updraftOpen();
+            pf.dusk = 1.0f - smoothstep(0.0f, 25.0f, m_mood.sunElevation);
+            m_particles.update(*m_scene, m_world, pf);
+            m_flapPending = false;
+            m_trailJump = false;
+        }
 
         // The glow of this frame.
         const glm::mat4 view = viewMatrix();
@@ -394,8 +422,8 @@ public:
         const Landmarks& l = m_world.landmarks();
         const float bright =
             m_ending >= 0.0f ? smoothstep(2.0f, 7.0f, m_ending) * (0.5f + 0.5f * float(m_spirits.awake())) : 0.0f;
-        // The temple's beam: a hot white core, the beam round it, a wide soft glow seen from afar, motes rising in it
-        // and a flare where it leaves the crown.
+        // The temple's beam: a hot white core, the beam round it, a wide soft glow seen from afar and a flare where it
+        // leaves the crown (the motes rising in it are particles).
         {
             const glm::vec3 base = l.beamBase + alt;
             const glm::vec3 top = base + glm::vec3(0.0f, 900.0f, 0.0f);
@@ -408,8 +436,6 @@ public:
                         glm::vec3(3.2f, 2.6f, 1.7f) * more, 0.01f, 0.45f, 2.0f);
             m_glow.beam(base, 7.0f + 2.0f * bright + 6.0f * wide, top, 40.0f,
                         glm::vec3(1.1f, 0.85f, 0.55f) * more * (1.0f + 1.4f * wide), 0.02f, 0.3f, 3.0f);
-            m_glow.motes(base + glm::vec3(0.0f, 24.0f, 0.0f), glm::vec3(1.8f, 24.0f, 1.8f), 160, 0.08f, 0.4f,
-                         glm::vec3(5.0f, 4.3f, 3.0f), 13.0f);
             const glm::vec3 crown = base + glm::vec3(0.0f, 12.2f, 0.0f);
             m_glow.sprite(crown, 5.0f, glm::vec3(2.0f, 1.65f, 1.1f) * more, 0.2f);
             // A streak of light across the crown, as through a lens.
@@ -430,15 +456,11 @@ public:
                             bright * (1.0f - age / 4.0f), glm::vec3(2.4f, 2.0f, 1.3f));
             }
         }
-        // The updraft: a column of rising motes and a faint shaft once it is open.
-        if (updraftOpen()) {
+        // The updraft: a faint shaft once it is open (its rising motes are particles).
+        if (updraftOpen())
             m_glow.beam(l.updraft + alt, l.updraftRadius * 0.8f,
                         l.updraft + alt + glm::vec3(0.0f, l.updraftTop - l.updraft.y, 0.0f), l.updraftRadius,
                         glm::vec3(0.9f, 1.0f, 1.1f) * 0.5f, 0.05f, 0.6f, 3.0f);
-            m_glow.motes(l.updraft + alt + glm::vec3(0.0f, 10.0f, 0.0f),
-                         glm::vec3(l.updraftRadius, 10.0f, l.updraftRadius), 120, 0.05f, 2.0f,
-                         glm::vec3(2.4f, 2.4f, 2.0f), 9.0f);
-        }
         // A small halo on each lit mark of a cape; the spirits' soft glow.
         const auto marks = [&](const Character& figure, float energy, int count, float flash) {
             for (int k = 0; k < std::min(count, int(kMarkUv.size())); ++k) {
@@ -459,23 +481,6 @@ public:
         for (const glm::vec3& shaft : l.caveShafts)
             m_glow.beam(shaft + alt + glm::vec3(-1.6f, 7.2f, 0.8f), 0.55f, shaft + alt, 0.95f,
                         glm::vec3(1.2f, 1.1f, 0.8f), 0.1f, 0.75f);
-        m_glow.motes(l.caveCentre + alt + glm::vec3(0.0f, 2.5f, 0.0f), glm::vec3(8.0f, 2.5f, 8.0f), 90, 0.035f, 0.6f,
-                     glm::vec3(4.0f, 3.6f, 1.6f), 3.0f);
-        // Motes of light in the air round the camera, in fixed cells of the world so that they stay where they are.
-        {
-            constexpr float kCell = 24.0f;
-            const glm::vec3 at = eye();
-            const glm::ivec2 home(int(std::floor(at.x / kCell)), int(std::floor(at.z / kCell)));
-            for (int dz = -1; dz <= 1; ++dz)
-                for (int dx = -1; dx <= 1; ++dx) {
-                    const glm::ivec2 cell = home + glm::ivec2(dx, dz);
-                    const glm::vec2 centre = (glm::vec2(cell) + 0.5f) * kCell;
-                    const float ground = m_world.terrainHeight({centre.x, centre.y}).value_or(at.y - kAltitude - 3.0f);
-                    const float y = std::max(ground + kAltitude + 2.5f, at.y - 6.0f);
-                    m_glow.motes(glm::vec3(centre.x, y, centre.y), glm::vec3(kCell * 0.5f, 3.0f, kCell * 0.5f), 36,
-                                 0.035f, 1.0f, glm::vec3(3.2f, 2.7f, 1.5f), float((cell.x * 73 + cell.y * 31) & 1023));
-                }
-        }
         // Small creatures of light that flutter over the meadows.
         for (int i = 0; i < 14; ++i) {
             const glm::vec3& home = l.lights[std::size_t(i) % l.lights.size()];
@@ -583,6 +588,10 @@ public:
         if (name == "energy") return m_player.energy;
         if (name == "max_energy") return m_player.maxEnergy;
         if (name == "glow_draws") return m_glow.draws();
+        if (name == "particles") return double(m_renderer->stats().particles);
+        if (name == "particle_systems") return double(m_renderer->stats().particleSystems);
+        if (name == "trails") return double(m_renderer->stats().trails);
+        if (name == "wing_trail") return m_particles.wingTrail() ? 1.0 : 0.0;
         if (name == "lights") return double(m_journey.lightsTaken());
         if (name == "candles") return double(m_journey.candlesLit());
         if (name == "warm") return m_journey.warm() ? 1.0 : 0.0;
@@ -640,6 +649,7 @@ public:
             m_figure.resetCape();
             m_camera.reset(p + glm::vec3(0.0f, kPivot, 0.0f), yaw);
             m_cut = true;
+            m_trailJump = true;
             return app::ScenarioExec::Done;
         }
         if ((command.op == "camera" || command.op == "orbit") && a.size() >= 3) {
@@ -767,8 +777,9 @@ public:
     std::string perfDetails(App& app) override {
         (void)app;
         const render::RenderStats& s = m_renderer->stats();
-        return std::format("draws={} instances={} culled={} shadow_draws={} render={}x{}", s.draws, s.instances,
-                           s.culled, s.shadowDraws, s.renderWidth, s.renderHeight);
+        return std::format("draws={} instances={} culled={} shadow_draws={} render={}x{} particles={} trails={}",
+                           s.draws, s.instances, s.culled, s.shadowDraws, s.renderWidth, s.renderHeight, s.particles,
+                           s.trails);
     }
 
 private:
@@ -970,6 +981,7 @@ private:
         if (app.mobile()) rs.renderScale *= 0.82f;
         m_playerRender = rs;
         m_renderer->setSettings(rs);
+        m_particles.setQuality(*m_scene, m_settings.quality);
         m_sound.setVolumes(m_settings.music, m_settings.effects);
     }
 
@@ -991,6 +1003,8 @@ private:
     std::optional<PhysicsWorld> m_physics;
     World m_world;
     Glow m_glow;
+    Particles m_particles;
+    bool m_flapPending = false, m_trailJump = false;
     weather::Weather m_weather;
     render::SurfaceId m_worldSurface;
     render::LightId m_sun;

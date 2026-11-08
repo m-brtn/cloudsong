@@ -1,6 +1,6 @@
 // Cloudsong's glow pass (render::PassStage::Transparent): light added to the HDR image, depth tested against the
 // scene, thinned by the fog. The geometry comes from the vertex index: a beam is a camera-facing strip along its
-// axis, the call's ring a band of quads around its centre, motes and sprites camera-facing quads.
+// axis, the call's ring a band of quads around its centre, sprites camera-facing quads.
 
 #include "quench/Fog.hlsli"
 #include "quench/Frame.hlsli"
@@ -16,8 +16,6 @@ struct GlowOut {
 cbuffer GlowBlock : QUENCH_UNIFORM(1) {
     GlowDraw glow;
 }
-
-float csGlowHash(float n) { return frac(sin(n * 12.9898 + 4.1414) * 43758.5453); }
 
 #if defined(QUENCH_ENTRY_glow_vs)
 static const float2 kCorners[6] = {float2(0.0, 0.0), float2(1.0, 0.0), float2(1.0, 1.0),
@@ -48,24 +46,6 @@ GlowOut glow_vs(uint vertex : SV_VertexID) {
         const float a = 6.2831853 * (float(quad) + c.x) / float(CS_RING_SEGMENTS);
         world = glow.a.xyz + float3(cos(a), 0.0, sin(a)) * glow.a.w + float3(0.0, (c.y - 0.25) * glow.b.x, 0.0);
         local.xy = float2(c.x, c.y);
-    } else if (type == CS_GLOW_MOTES) {
-        const float n = float(quad) + glow.params.x * 101.0;
-        const float3 h = float3(csGlowHash(n), csGlowHash(n + 17.3), csGlowHash(n + 41.7));
-        const float time = glow.params.y;
-        const float phase = csGlowHash(n + 7.1) * 6.2831853;
-        const float3 drift = float3(sin(time * 0.31 + phase), sin(time * 0.23 + phase * 1.7) * 0.7 + time * 0.0,
-                                    cos(time * 0.27 + phase * 0.6)) * glow.params.z;
-        float3 centre = glow.a.xyz + (h * 2.0 - 1.0) * glow.b.xyz + drift;
-        // Motes rise slowly through their box and start again at the bottom.
-        const float rise = frac(h.y + time * 0.02 * (0.5 + csGlowHash(n + 3.3)));
-        centre.y = glow.a.y + (rise * 2.0 - 1.0) * glow.b.y;
-        const float size = glow.b.w * (0.5 + csGlowHash(n + 5.5));
-        const float2 q = c * 2.0 - 1.0;
-        world = centre + (glow.right.xyz * q.x + glow.up.xyz * q.y) * size;
-        local.xy = q;
-        const float twinkle = 0.55 + 0.45 * sin(time * (1.3 + h.x * 2.0) + phase);
-        // Fade in and out at the box's top and bottom.
-        color.rgb *= twinkle * sin(3.14159265 * rise);
     } else {
         const float4 s = glow.sprite[quad];
         const float2 q = c * 2.0 - 1.0;
@@ -103,7 +83,7 @@ float4 glow_fs(GlowOut i) : SV_Target0 {
         const float r2 = dot(i.local.xy, i.local.xy);
         if (r2 > 1.0) discard;
         const float soft = (1.0 - r2) * (1.0 - r2);
-        a = type == CS_GLOW_MOTES ? soft * soft : soft * soft * (1.0 - i.color.w) + (exp(-r2 * 30.0) * 2.0 + soft * 0.4) * i.color.w;
+        a = soft * soft * (1.0 - i.color.w) + (exp(-r2 * 30.0) * 2.0 + soft * 0.4) * i.color.w;
     }
     return float4(i.color.rgb * a * i.local.z, 0.0);
 }

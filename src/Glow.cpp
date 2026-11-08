@@ -52,17 +52,6 @@ void Glow::ring(glm::vec3 centre, float radius, float height, float strength, gl
     m_vertices.push_back(CS_RING_SEGMENTS * 6);
 }
 
-void Glow::motes(glm::vec3 centre, glm::vec3 half, int count, float size, float drift, glm::vec3 color, float seed) {
-    if (count <= 0) return;
-    quench::shader::GlowDraw d{};
-    d.a = glm::vec4(centre, float(count));
-    d.b = glm::vec4(half, size);
-    d.color = glm::vec4(color, float(CS_GLOW_MOTES));
-    d.params = glm::vec4(seed, m_time, drift, 0.0f);
-    m_draws.push_back(d);
-    m_vertices.push_back(std::uint32_t(count) * 6u);
-}
-
 void Glow::sprite(glm::vec3 at, float radius, glm::vec3 color, float core) {
     // Sprites share a draw until it is full.
     if (m_draws.empty() || m_draws.back().color.w != float(CS_GLOW_SPRITES) ||

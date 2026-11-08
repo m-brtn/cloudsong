@@ -35,12 +35,13 @@ quench_add_game(cloudsong
     COOKED_ASSETS cloudsong_weather_sounds
     ORIENTATIONS landscape
     SOURCES src/Game.cpp src/Front.cpp src/Settings.cpp src/Character.cpp src/World.cpp src/Glow.cpp src/Journey.cpp src/Player.cpp
-        src/Spirits.cpp src/Sound.cpp)
+        src/Spirits.cpp src/Sound.cpp src/Particles.cpp)
 target_include_directories(cloudsong PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(cloudsong PRIVATE -Wall -Wextra)
 endif()
-target_link_libraries(cloudsong PRIVATE quench_render quench_physics quench_animation quench_navigation)
+target_link_libraries(cloudsong PRIVATE quench_render quench_physics quench_animation quench_navigation
+                                        quench_particles)
 quench_add_shaders(cloudsong NAME world SOURCE shaders/world.hlsl
     ENTRIES surface_vs:vertex surface_fs:fragment surface_basic_fs:fragment)
 quench_add_shaders(cloudsong NAME foliage SOURCE shaders/foliage.hlsl

@@ -1,8 +1,8 @@
 #pragma once
 
 // The game's glow pass: light added to the HDR image after the transparent surfaces (shafts in the cave, the
-// temple's beam, the call's ring, drifting motes, soft halos), collected each frame and drawn by the renderer's
-// PassStage::Transparent callback.
+// temple's beam, the call's ring, soft halos), collected each frame and drawn by the renderer's
+// PassStage::Transparent callback. Motes and trails are the engine's particles (Particles.h).
 
 #include "shaders/GlowUniforms.h"
 
@@ -26,7 +26,6 @@ public:
     void beam(glm::vec3 a, float radiusA, glm::vec3 b, float radiusB, glm::vec3 color, float fadeIn = 0.15f,
               float fadeOut = 0.7f, float seed = 0.0f);
     void ring(glm::vec3 centre, float radius, float height, float strength, glm::vec3 color);
-    void motes(glm::vec3 centre, glm::vec3 half, int count, float size, float drift, glm::vec3 color, float seed);
     void sprite(glm::vec3 at, float radius, glm::vec3 color, float core = 0.0f);
 
     int draws() const { return m_drawn; }
