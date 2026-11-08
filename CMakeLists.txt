@@ -54,14 +54,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
     # Scripted offscreen runs; their captures and user files go to the build's captures/, never to the player's.
     set(capture_dir ${CMAKE_CURRENT_BINARY_DIR}/captures)
-    foreach(check smoke flight journey sound)
+    foreach(check smoke flight journey sound guide)
         add_test(NAME ${check} COMMAND cloudsong --window 640x360 --user-dir ${capture_dir}
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/${check}.txt)
     endforeach()
     # The touch controls' places are in window points: a 1280x720 window.
     add_test(NAME front COMMAND cloudsong --window 1280x720 --frame-size 640x360 --user-dir ${capture_dir}
              --script ${CMAKE_CURRENT_SOURCE_DIR}/scenarios/front.txt)
-    set_tests_properties(smoke flight journey sound front PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
+    set_tests_properties(smoke flight journey sound guide front PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL line")
 
     # Golden images: the key views at fixed frames, compared with tests/golden/metal/ (the default backend on Apple
     # platforms, native Metal, on the M4 Pro Mac) by the engine's image compare tool.

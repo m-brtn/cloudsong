@@ -1,10 +1,11 @@
 #pragma once
 
 // The game's particles and trails, on the engine's (render::Scene::addParticles, addTrail): a ribbon of light from
-// each corner of the cape while the figure flies or glides, streams of light that loop through the sky over the
-// meadow, round the updraft's isle and round the temple, a field of twinkling points over the meadow round the camera
-// (denser as the sun goes down), and motes rising in the temple's beam and the updraft and drifting in the cave.
-// Their counts follow the picture setting.
+// each corner of the cape while the figure flies or glides; the call's guide, a few heads of light with soft ribbons
+// that rise beside the figure, fly over the isles to the journey's next goal, linger there and fade; sparse
+// twinkling points round the camera over the flower fields, round the lanterns, along the isles' rims and in the
+// cave (denser as the sun goes down); a few motes rising in the temple's beam and the open updraft and drifting in
+// the cave. Their counts follow the picture setting.
 
 #include "Settings.h"
 
@@ -13,7 +14,7 @@
 
 #include <glm/glm.hpp>
 
-#include <array>
+#include <optional>
 #include <vector>
 
 namespace cloudsong {
@@ -39,25 +40,18 @@ public:
     quench::Result<void> create(quench::render::Scene& scene, const World& world, Quality quality);
     // Another picture setting: the systems' sizes and the trails' counts (restarts them).
     void setQuality(quench::render::Scene& scene, Quality quality);
+    // The call at `feet` (world): the guide rises there and flies to `goal` (world, where it lingers), into the cave
+    // through its mouth; with no goal it circles the figure once. A call while it is out sends it on from where its
+    // first head is.
+    void call(const World& world, glm::vec3 feet, std::optional<glm::vec3> goal);
     void update(quench::render::Scene& scene, const World& world, const Frame& frame);
 
     bool wingTrail() const { return m_emitting; }
+    bool guiding() const { return m_guideAge >= 0.0f; }
+    // From the guide's first head to where it lingers (m); 0 with no guide out or while it circles the figure.
+    float guideDistance() const;
 
 private:
-    struct StreamLook {
-        glm::vec3 color; // the ribbons' linear HDR color
-        float speed;     // m/s along the course
-        float gap;       // m between two heads
-        float braid;     // m: how far the heads weave round the course
-        std::uint32_t seed;
-    };
-    struct Stream {
-        StreamLook look;
-        quench::particles::Path path;
-        std::vector<quench::render::TrailId> heads;
-        std::vector<quench::render::TrailId> halos; // a wide faint ribbon round each head's, or none
-        quench::render::ParticleSystemId sparkles;
-    };
     // A ribbon from the cape, trails that follow one point: a warm band, alpha-blended so that its colour holds
     // against a bright sky; the light along its middle with the glowing head at the cape (additive, it sheds the
     // sparkles); on the finer settings a wide faint glow round them.
@@ -65,18 +59,36 @@ private:
         std::vector<quench::render::TrailId> trails;
     };
 
-    void buildStreams(quench::render::Scene& scene);
-    void removeStreams(quench::render::Scene& scene);
+    void buildGuide(quench::render::Scene& scene);
+    void removeGuide(quench::render::Scene& scene);
     void buildWings(quench::render::Scene& scene);
-    glm::vec3 headAt(const Stream& stream, int k, double t) const;
+    // Appends the way from route.back() to `to` through the open air: an arc `rise` m high in its middle, kept clear
+    // of the ground and of the cave's roof away from its ends.
+    void arcTo(std::vector<glm::vec3>& route, const World& world, glm::vec3 to, float rise) const;
+    glm::vec3 guideLead(float age) const; // where the first head is
+    void updateGuide(quench::render::Scene& scene, const Frame& frame);
+    float fieldDensity(const World& world, glm::vec2 xz) const;
     void emitField(quench::render::Scene& scene, const World& world, const Frame& frame);
 
     Quality m_quality = Quality::High;
-    glm::vec3 m_altar{0.0f}, m_updraft{0.0f}, m_beamBase{0.0f}, m_cave{0.0f};
-    float m_updraftRadius = 3.0f, m_updraftTop = 60.0f;
-    std::array<std::vector<glm::vec3>, 3> m_courses; // the streams' courses (world), clear of the ground
+    glm::vec3 m_updraft{0.0f}, m_beamBase{0.0f}, m_cave{0.0f}, m_caveEntrance{0.0f};
+    float m_updraftRadius = 3.0f, m_updraftTop = 60.0f, m_caveRadius = 11.0f, m_caveHeight = 7.5f;
+    std::vector<glm::vec3> m_lanterns;
+    glm::vec3 m_eye{0.0f};
 
-    std::vector<Stream> m_streams;
+    // The guide: its heads' ribbons (a core each and, on the finer settings, a soft band) and their sparkles; its
+    // way, and where it lingers at the end (radius 0: the way circles the figure and ends there).
+    std::vector<quench::render::TrailId> m_guideHeads, m_guideHalos;
+    quench::render::ParticleSystemId m_guideSparkles;
+    quench::particles::Path m_route;
+    glm::vec3 m_lingerCentre{0.0f};
+    float m_lingerRadius = 0.0f, m_lingerAngle = 0.0f;
+    float m_travel = 0.0f;    // s along the way
+    float m_guideAge = -1.0f; // s since the call; negative: no guide out
+    bool m_guideEmitting = false;
+    bool m_guideRestart = false;      // the next update starts new ribbons at the figure
+    std::vector<glm::vec3> m_guideAt; // the heads' places before their weave
+
     std::vector<Wing> m_wings;
     quench::render::ParticleSystemId m_wingSparkles;
     bool m_emitting = false;
@@ -85,7 +97,8 @@ private:
 
     quench::render::ParticleSystemId m_field, m_beam, m_rising, m_caveMotes;
     std::vector<glm::vec3> m_spawns; // this frame's points of the field
-    double m_fieldDue = 0.0;         // the field's points owed (fractional)
+    double m_fieldDue = 0.0;         // the field's candidate points owed (fractional)
+    double m_lanternDue = 0.0;       // the points owed to each lantern (fractional)
     std::uint32_t m_random = 0x51f0u;
 };
 

@@ -20,8 +20,10 @@ the light, the music and the sounds (see `CREDITS.md`).
 Start on the meadow. Drifting lights hang over the isles: gathering them adds marks to the cape, and each lit mark
 is one flap in the air. The marks fill again on the ground near warm light (the lanterns, the lit candles). Three
 cold candles stand by three sleeping spirits: by the pond, in the green cave and on an isle across the clouds. Call
-beside a candle to light it; its spirit wakes and follows. With every candle lit, rising air opens on the isle of the
-broken columns and carries the player up to the temple of light. Stand at its altar with the spirits.
+beside a candle to light it; its spirit wakes and follows. A call anywhere also shows the way: a few small lights
+rise beside the figure and fly to the nearest cold candle (later to the rising air, then to the altar), circle it
+for a moment and fade. With every candle lit, rising air opens on the isle of the broken columns and carries the
+player up to the temple of light. Stand at its altar with the spirits.
 
 ## Controls
 
@@ -31,7 +33,7 @@ broken columns and carries the player up to the temple of light. Stand at its al
 | Walk slowly | Left Shift | push the stick a little | a short push |
 | Camera | drag with the mouse, or J L I K | right stick | right thumb |
 | Jump; in the air: flap (uses a mark), hold: glide | Space | A (south) | the arrow button |
-| Call (lights a candle near by) | E | X (west) | the rings button |
+| Call (shows the way, lights a candle near by) | E | X (west) | the rings button |
 | Rest (pause, settings) | Escape | Start (Menu) | the pause button |
 
 Settings (on the title and when resting): picture quality (Light, Balanced, Beautiful), music and sound volume,

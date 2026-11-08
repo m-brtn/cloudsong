@@ -16,10 +16,10 @@ jump up
 wait 0.05
 jump down
 until glide > 0.5 2
-# The cape's ribbons while gliding; the streams of light and the meadow's points are drawn.
+# The cape's ribbons while gliding, their sparkles and the field's points are drawn.
 expect wing_trail == 1
 expect trails > 2
-expect particles > 100
+expect particles > 20
 until grounded == 1 4
 expect lights == 1
 expect max_energy == 3

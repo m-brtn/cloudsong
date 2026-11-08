@@ -385,7 +385,11 @@ public:
                                   glm::vec4(m_player.energy, float(m_player.maxEnergy), m_flash, 0.0f));
 
         if (m_callAge < 50.0f) {
-            if (m_callAge == 0.0f) m_callCentre = feet;
+            if (m_callAge == 0.0f) {
+                m_callCentre = feet;
+                m_guideGoal = guideGoal(feet);
+                m_particles.call(m_world, feet, guidePlace(m_guideGoal));
+            }
             m_callAge += dt;
             m_world.setCallRing(*m_scene, m_callCentre, m_callAge);
         }
@@ -393,7 +397,7 @@ public:
         m_scene->setWeather(m_weather);
         m_world.updateDetail(*m_scene, eye());
         {
-            // The cape's ribbons while flying or gliding, the streams of light, the meadow's twinkling field.
+            // The cape's ribbons while flying or gliding, the call's guide, the meadow's twinkling field.
             Particles::Frame pf;
             pf.time = double(m_time);
             pf.dt = dt;
@@ -481,9 +485,12 @@ public:
         for (const glm::vec3& shaft : l.caveShafts)
             m_glow.beam(shaft + alt + glm::vec3(-1.6f, 7.2f, 0.8f), 0.55f, shaft + alt, 0.95f,
                         glm::vec3(1.2f, 1.1f, 0.8f), 0.1f, 0.75f);
-        // Small creatures of light that flutter over the meadows.
-        for (int i = 0; i < 14; ++i) {
-            const glm::vec3& home = l.lights[std::size_t(i) % l.lights.size()];
+        // Small creatures of light that flutter by every other drifting light until it is gathered.
+        for (int i = 0; i < int(l.lights.size()); i += 2) {
+            const glm::vec3& home = l.lights[std::size_t(i)];
+            const float age = m_journey.lightAge(std::size_t(i));
+            const float left = age < 0.0f ? 1.0f : 1.0f - smoothstep(0.0f, 1.0f, age);
+            if (left <= 0.0f) continue;
             const float p = float(i) * 2.399f;
             const float t = m_time * (0.35f + 0.05f * float(i % 4));
             const glm::vec3 offset(std::sin(t + p) * 3.5f + std::sin(t * 2.3f + p) * 0.8f,
@@ -491,8 +498,8 @@ public:
                                    std::cos(t * 0.8f + p) * 3.5f + std::cos(t * 1.9f) * 0.6f);
             const float flutter = 0.6f + 0.4f * std::abs(std::sin(m_time * 14.0f + p));
             const glm::vec3 tint = i % 3 == 0 ? glm::vec3(1.2f, 1.6f, 2.0f) : glm::vec3(2.0f, 1.5f, 1.4f);
-            m_glow.sprite(home + alt + offset + glm::vec3(float(i % 3) - 1.0f, 0.0f, float(i % 2) * 2.0f - 1.0f),
-                          0.16f * flutter, tint, 0.7f);
+            m_glow.sprite(home + alt + offset + glm::vec3(float(i % 3) - 1.0f, 0.0f, 0.0f), 0.14f * flutter,
+                          tint * (0.75f * left), 0.7f);
         }
         // The drifting lights; a gathered one flies into the cape and fades.
         const glm::vec3 chest = feet + glm::vec3(0.0f, 0.55f, 0.0f);
@@ -592,6 +599,9 @@ public:
         if (name == "particle_systems") return double(m_renderer->stats().particleSystems);
         if (name == "trails") return double(m_renderer->stats().trails);
         if (name == "wing_trail") return m_particles.wingTrail() ? 1.0 : 0.0;
+        if (name == "guide") return m_particles.guiding() ? 1.0 : 0.0;
+        if (name == "guide_dist") return m_particles.guideDistance();
+        if (name == "guide_goal") return m_guideGoal;
         if (name == "lights") return double(m_journey.lightsTaken());
         if (name == "candles") return double(m_journey.candlesLit());
         if (name == "warm") return m_journey.warm() ? 1.0 : 0.0;
@@ -848,6 +858,34 @@ private:
         m_scene->setEnvironment(env);
     }
     bool updraftOpen() const { return m_journey.candlesLit() == m_world.landmarks().candles.size(); }
+    // The journey's next goal from `feet` (world), where the call's guide flies: the nearest candle still cold (its
+    // index), then the open updraft, and from above its middle height the altar; -1 when the goal is at hand.
+    static constexpr int kGoalUpdraft = 3, kGoalAltar = 4;
+    int guideGoal(glm::vec3 feet) const {
+        const Landmarks& l = m_world.landmarks();
+        const glm::vec3 local = feet - glm::vec3(0.0f, kAltitude, 0.0f);
+        int goal = -1;
+        float best = 1e9f;
+        for (std::size_t i = 0; i < l.candles.size(); ++i)
+            if (!m_journey.candleLit(i) && glm::distance(l.candles[i], local) < best) {
+                best = glm::distance(l.candles[i], local);
+                goal = int(i);
+            }
+        if (goal < 0) goal = local.y > 0.5f * (l.updraft.y + l.altar.y) ? kGoalAltar : kGoalUpdraft;
+        const std::optional<glm::vec3> at = guidePlace(goal);
+        if (glm::length(glm::vec2(at->x - feet.x, at->z - feet.z)) < 6.0f) return -1;
+        return goal;
+    }
+    // Where the guide lingers at a goal (world).
+    std::optional<glm::vec3> guidePlace(int goal) const {
+        const Landmarks& l = m_world.landmarks();
+        const glm::vec3 alt(0.0f, kAltitude, 0.0f);
+        if (goal >= 0 && goal < int(l.candles.size()))
+            return l.candles[std::size_t(goal)] + alt + glm::vec3(0.0f, 0.35f, 0.0f);
+        if (goal == kGoalUpdraft) return l.updraft + alt + glm::vec3(0.0f, 2.5f, 0.0f);
+        if (goal == kGoalAltar) return l.altar + alt + glm::vec3(0.0f, 1.8f, 0.0f);
+        return std::nullopt;
+    }
     // The title's view: low behind the figure on the meadow, past it toward the temple's beam, drifting slowly.
     std::pair<glm::vec3, glm::vec3> titleView() const {
         const Landmarks& l = m_world.landmarks();
@@ -925,7 +963,8 @@ private:
 
     const char* controlsHint(const App& app) const {
         const float since = m_time - m_begunAt;
-        if (since > 12.0f) return "Gather the drifting lights, and call beside the cold candles.";
+        if (since > 12.0f)
+            return "Call to be shown the way. Gather the drifting lights, and call beside a cold candle.";
         if (m_touchUi)
             return "Left thumb to walk, right thumb to look, the arrow to jump (hold to glide), the rings to call";
         if (app.input().gamepadConnected())
@@ -1042,6 +1081,7 @@ private:
     bool m_jumpWasDown = false, m_callWasDown = false, m_scriptCall = false;
     float m_callAge = 100.0f;
     glm::vec3 m_callCentre{0.0f};
+    int m_guideGoal = -1; // where the last call's guide flew (guideGoal)
     Journey m_journey;
     Spirits m_spirits;
     Sound m_sound;
