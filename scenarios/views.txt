@@ -16,10 +16,19 @@ capture views/hill.png
 view 0 40 -70 0 -160 -700
 wait 0.5
 capture views/clouds.png
-view -12 80 170 10 70 218
+view -40 95 120 10 60 218
 wait 0.5
 capture views/temple.png
-view 40 14 30 64 6 63
+view 30 70 190 10 66 218
+wait 0.5
+capture views/temple_top.png
+view 46 8 45 59 3.5 58.5
 wait 0.5
 capture views/cave.png
+view 57.5 4.6 56.6 67 3.5 66
+wait 0.5
+capture views/cave_inside.png
+view -4 3.5 -2 -18 0.8 -13
+wait 0.5
+capture views/pond.png
 quit

@@ -1,7 +1,7 @@
 // Cloudsong's world surface: the isles' ground, the stone of the ruins and the caped figures, lit by the engine.
 // MaterialDesc::params[0].x picks the look: 0 ground, 1 stone (moss on what faces up), 2 a figure (its cape's marks
-// glow with the flight energy). A figure's InstanceDesc::custom: x the energy (marks lit), y the marks on the cape,
-// z a flash (0..1), w how dormant it is (0 awake .. 1 grey and still).
+// glow with the flight energy), 3 the cave's rock (mossy outside, dim inside). A figure's InstanceDesc::custom: x the
+// energy (marks lit), y the marks on the cape, z a flash (0..1), w how dormant it is (0 awake .. 1 grey and still).
 
 #include "quench/Surface.hlsli"
 
@@ -32,9 +32,18 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
     QuenchSurface s = quenchStandardSurface(i);
     const float mode = quenchMaterial.params[0].x;
     if (mode < 0.5) {
-        // The ground: soft variation at two scales.
+        // The ground: soft variation at two scales; where it is steep, rock in strata with cracks.
         const float n = csNoise(i.world.xz * 0.31) * 0.6 + csNoise(i.world.xz * 1.9) * 0.4;
         s.albedo *= lerp(0.84, 1.1, n);
+        const float steep = 1.0 - smoothstep(0.45, 0.75, i.normal.y);
+        if (steep > 0.0) {
+            const float2 q = float2(i.world.x + i.world.z, i.world.y);
+            const float strata = csNoise(float2(q.x * 0.08, q.y * 1.1)) * 0.6 + csNoise(q * float2(0.5, 3.0)) * 0.4;
+            const float groove = csNoise(float2(q.x * 1.3, q.y * 0.15)) * 0.6 + csNoise(float2(q.x * 4.0, q.y * 0.4)) * 0.4;
+            const float3 rock = float3(0.36, 0.32, 0.28) * lerp(0.7, 1.2, strata) * lerp(0.75, 1.08, groove);
+            s.albedo = lerp(s.albedo, rock, steep * 0.85);
+            s.roughness = lerp(s.roughness, 0.8, steep);
+        }
     } else if (mode < 1.5) {
         // Stone: weathered, with moss on its upper faces.
         const float3 p = i.world * 1.3;
@@ -46,6 +55,21 @@ QuenchSurface worldSurface(QuenchSurfaceInput i) {
         s.albedo = lerp(s.albedo, float3(0.2, 0.3, 0.1), moss * 0.8);
         s.roughness = lerp(s.roughness, 0.95, moss);
         s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
+    } else if (mode > 2.5) {
+        // The cave's rock: moss over its back outside; inside dim, green and damp, out of the sky's light.
+        const float3 p = i.world * 0.8;
+        const float n = csNoise(p.xz + p.y * 0.7) * 0.55 + csNoise(p.xy * 2.3 + p.z) * 0.45;
+        s.albedo *= lerp(0.75, 1.15, n);
+        if (i.front) {
+            const float moss = smoothstep(0.25, 0.65, i.normal.y + (n - 0.5) * 0.6);
+            s.albedo = lerp(s.albedo, float3(0.2, 0.32, 0.1), moss * 0.9);
+            s.emissive += csRim(i, s.normal, 0.05) * s.albedo;
+        } else {
+            const float moss = smoothstep(0.35, 0.7, n + 0.25 * csNoise(i.world.xz * 0.5));
+            s.albedo = lerp(s.albedo * float3(0.75, 0.85, 0.8), float3(0.12, 0.26, 0.14), moss * 0.8);
+            s.occlusion = 0.3;
+            s.roughness = lerp(0.9, 0.55, moss);
+        }
     } else {
         // A figure. The cape (uv.x from 2): its inside darker, a band of diamond marks that glow with the energy and
         // a gold hem.

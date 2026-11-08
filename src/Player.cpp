@@ -85,7 +85,8 @@ void Player::step(float dt, const PlayerInput& in, quench::PhysicsWorld& physics
         m_coyote = 0.12f;
         const float speed = (in.walk ? kWalkSpeed : kRunSpeed) * amount;
         const glm::vec2 h = approach2({v.x, v.z}, glm::vec2(wish.x, wish.z) * speed, 22.0f * dt);
-        v = glm::vec3(h.x, std::min(v.y, 0.0f), h.y);
+        // No fall speed kept on the ground: it would eat the speed up a slope.
+        v = glm::vec3(h.x, 0.0f, h.y);
         if (in.jumpPressed) jump = true;
         m_glide = approach(m_glide, 0.0f, 0.06f, dt);
         if (amount > 0.1f) m_yaw = turnToward(m_yaw, std::atan2(wish.x, wish.z), 11.0f * dt);

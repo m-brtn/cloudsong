@@ -315,8 +315,8 @@ public:
         m_glow.beam(l.beamBase + alt, 1.4f, l.beamBase + alt + glm::vec3(0.0f, 900.0f, 0.0f), 3.0f,
                     glm::vec3(3.2f, 2.6f, 1.8f), 0.02f, 0.4f);
         for (const glm::vec3& shaft : l.caveShafts)
-            m_glow.beam(shaft + alt + glm::vec3(-2.0f, 9.0f, 1.0f), 0.9f, shaft + alt, 1.4f,
-                        glm::vec3(1.6f, 1.45f, 1.0f), 0.1f, 0.75f);
+            m_glow.beam(shaft + alt + glm::vec3(-1.6f, 7.2f, 0.8f), 0.55f, shaft + alt, 0.95f,
+                        glm::vec3(1.2f, 1.1f, 0.8f), 0.1f, 0.75f);
         m_glow.motes(l.caveCentre + alt + glm::vec3(0.0f, 2.5f, 0.0f), glm::vec3(8.0f, 2.5f, 8.0f), 90, 0.035f, 0.6f,
                      glm::vec3(4.0f, 3.6f, 1.6f), 3.0f);
         m_glow.motes(l.start + alt + glm::vec3(0.0f, 2.0f, 20.0f), glm::vec3(30.0f, 2.0f, 30.0f), 160, 0.03f, 1.0f,

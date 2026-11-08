@@ -21,8 +21,9 @@ inline constexpr float kAltitude = 2200.0f;
 struct Bump {
     glm::vec2 at;
     float radius;
-    float height;      // negative: a hollow
-    float flat = 0.0f; // 0..1: share of the radius that is level at the top (a plateau, a pond's floor)
+    float height;        // negative: a hollow
+    float flat = 0.0f;   // 0..1: share of the radius that is level at the top (a plateau, a pond's floor)
+    float jagged = 0.0f; // 0..: how much the outline wanders from a circle
 };
 
 struct IsleDesc {
@@ -40,6 +41,7 @@ struct Isle {
     IsleDesc desc;
     std::optional<float> heightAt(glm::vec2 xz) const; // local height of the ground (m), none outside
     float outline(float angle) const;                  // radius of the outline at an angle about the centre
+    float slope(glm::vec2 xz) const;                   // steepness of the ground (rise over run), 0 outside
     glm::vec3 grassColor(glm::vec2 xz) const;          // linear
 };
 
@@ -60,6 +62,9 @@ struct Landmarks {
     glm::vec3 caveCentre;
     float caveRadius = 11.0f;
     std::vector<glm::vec3> caveShafts; // where the light falls into the cave (the floor)
+    std::vector<glm::vec3> caveHoles;  // where it comes in through the roof
+    glm::vec3 caveEntrance;            // just inside the cave's mouth (the floor)
+    float caveHeight = 7.5f;
     glm::vec3 pond;
     float pondRadius = 6.0f;
 };
@@ -97,6 +102,10 @@ private:
     void buildIsle(quench::render::Scene& scene, quench::PhysicsWorld& physics, const Isle& isle);
     void buildFoliage(quench::render::Scene& scene, const Isle& isle, float density);
     void buildRuins(quench::render::Scene& scene, quench::PhysicsWorld& physics);
+    void buildCave(quench::render::Scene& scene, quench::PhysicsWorld& physics);
+    void addLights(quench::render::Scene& scene);
+    // How much of the open sky's light reaches the ground here (1 in the open, low inside the cave).
+    float shade(glm::vec2 xz) const;
     void addStatic(quench::PhysicsWorld& physics, const MeshData& mesh);
     void addBox(quench::PhysicsWorld& physics, glm::vec3 centre, glm::vec3 half, float yaw);
     bool excluded(glm::vec2 xz) const;
@@ -107,7 +116,8 @@ private:
     std::vector<std::pair<glm::vec2, float>> m_clear; // circles without grass (ruins, the pond)
     std::vector<std::pair<glm::vec2, float>> m_stone; // circles of stone floor (footsteps)
     quench::render::SurfaceId m_worldSurface, m_foliageSurface;
-    quench::render::MaterialId m_terrain, m_stoneMaterial, m_grass, m_water, m_flame, m_flameOff;
+    quench::render::MaterialId m_terrain, m_stoneMaterial, m_grass, m_water, m_flame, m_flameOff, m_caveMaterial,
+        m_glowCap;
     std::vector<quench::render::InstanceId> m_flames;
     quench::render::MaterialDesc m_grassDesc;
     float m_detailDistance = 34.0f;

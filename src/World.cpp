@@ -18,7 +18,12 @@ namespace {
 const glm::vec3 kAlt(0.0f, kAltitude, 0.0f);
 
 float bumpAt(const Bump& b, glm::vec2 xz) {
-    const float d = glm::distance(xz, b.at) / b.radius;
+    float radius = b.radius;
+    if (b.jagged > 0.0f) {
+        const glm::vec2 dir = glm::normalize(xz - b.at + glm::vec2(1e-5f));
+        radius *= 1.0f + b.jagged * fbm(dir * 2.4f + b.at * 0.01f, 3, 97u);
+    }
+    const float d = glm::distance(xz, b.at) / radius;
     if (d >= 1.0f) return 0.0f;
     const float t = std::clamp((d - b.flat) / std::max(1.0f - b.flat, 1e-3f), 0.0f, 1.0f);
     return b.height * 0.5f * (1.0f + std::cos(kPi * t));
@@ -53,6 +58,14 @@ std::optional<float> Isle::heightAt(glm::vec2 xz) const {
     return h;
 }
 
+float Isle::slope(glm::vec2 xz) const {
+    const float e = 0.5f;
+    const std::optional<float> x0 = heightAt(xz - glm::vec2(e, 0.0f)), x1 = heightAt(xz + glm::vec2(e, 0.0f));
+    const std::optional<float> z0 = heightAt(xz - glm::vec2(0.0f, e)), z1 = heightAt(xz + glm::vec2(0.0f, e));
+    if (!x0 || !x1 || !z0 || !z1) return 0.0f;
+    return glm::length(glm::vec2(*x1 - *x0, *z1 - *z0)) / (2.0f * e);
+}
+
 glm::vec3 Isle::grassColor(glm::vec2 xz) const {
     const float a = fbm(xz / 22.0f, 3, desc.seed + 11) * 0.5f + 0.5f;
     const float b = fbm(xz / 6.0f, 2, desc.seed + 13) * 0.5f + 0.5f;
@@ -77,7 +90,7 @@ World::World() {
            {{4.0f, -22.0f}, 9.0f, 0.6f, 0.6f}},
           1.0f}},
         // The cave isle.
-        {{{62.0f, 58.0f}, 3.0f, 30.0f, 2.0f, 28.0f, 23u, {{{64.0f, 63.0f}, 13.0f, 0.4f, 0.85f}}, 0.8f}},
+        {{{62.0f, 58.0f}, 3.0f, 30.0f, 1.0f, 28.0f, 23u, {{{64.0f, 63.0f}, 13.0f, 0.4f, 0.85f}}, 0.8f}},
         // Stepping stones toward the spirit isle.
         {{{-36.0f, 46.0f}, 3.0f, 9.0f, 0.8f, 18.0f, 31u, {}, 1.4f}},
         // The spirit isle.
@@ -85,7 +98,15 @@ World::World() {
         // The isle of the updraft.
         {{{-20.0f, 128.0f}, 0.5f, 15.0f, 0.8f, 26.0f, 41u, {{{-20.0f, 128.0f}, 6.0f, 0.3f, 0.7f}}, 1.0f}},
         // The temple's mountain.
-        {{{10.0f, 205.0f}, 44.0f, 40.0f, 3.0f, 52.0f, 53u, {{{10.0f, 218.0f}, 26.0f, 24.0f, 0.3f}}, 0.7f}},
+        // The temple's mesa: sheer rock on a ring of meadow, a stair around it.
+        {{{10.0f, 214.0f},
+          40.0f,
+          42.0f,
+          1.5f,
+          64.0f,
+          53u,
+          {{{10.0f, 218.0f}, 22.0f, 24.0f, 0.7f, 0.09f}, {{-16.0f, 202.0f}, 7.0f, 2.5f}, {{36.0f, 214.0f}, 6.0f, 2.0f}},
+          0.7f}},
         // Far isles that frame the view.
         {{{125.0f, 140.0f}, 26.0f, 26.0f, 4.0f, 30.0f, 61u, {{{125.0f, 140.0f}, 14.0f, 9.0f}}, 0.6f}},
         {{{-125.0f, 30.0f}, -14.0f, 30.0f, 3.0f, 30.0f, 67u, {}, 0.6f}},
@@ -105,13 +126,19 @@ World::World() {
     l.pondRadius = 6.6f;
     l.caveCentre = ground(64.0f, 63.0f, 0.0f);
     l.caveRadius = 11.0f;
-    l.caveShafts = {ground(62.0f, 61.0f, 0.0f), ground(67.5f, 66.0f, 0.0f), ground(60.5f, 67.5f, 0.0f)};
+    l.caveShafts = {ground(63.0f, 60.5f, 0.0f), ground(67.5f, 65.5f, 0.0f), ground(61.0f, 67.0f, 0.0f)};
+    // The shafts come down slanted from holes in the roof.
+    for (const glm::vec3& f : l.caveShafts) l.caveHoles.push_back(f + glm::vec3(-1.6f, 7.2f, 0.8f));
+    {
+        const glm::vec2 out = glm::normalize(glm::vec2(-l.caveCentre.x, -l.caveCentre.z));
+        l.caveEntrance = ground(l.caveCentre.x + out.x * 8.0f, l.caveCentre.z + out.y * 8.0f, 0.0f);
+    }
     l.lights = {ground(-6.0f, -27.0f, 1.4f),    ground(18.0f, -10.0f, 1.5f),     ground(-31.0f, 4.0f, 1.5f),
                 ground(14.0f, 16.0f, 2.2f),     ground(-10.0f, 22.0f, 1.4f),     glm::vec3(36.0f, 12.0f, 36.0f),
                 ground(52.0f, 42.0f, 1.5f),     ground(76.0f, 70.0f, 1.5f),      ground(64.5f, 64.0f, 1.6f),
                 glm::vec3(-28.4f, 3.4f, 36.2f), glm::vec3(-50.0f, 5.0f, 68.0f),  ground(-58.0f, 96.0f, 1.5f),
                 ground(-24.0f, 122.0f, 1.5f),   glm::vec3(-6.0f, 97.0f, 160.0f), ground(4.0f, 178.0f, 1.6f),
-                ground(22.0f, 206.0f, 1.6f)};
+                ground(15.0f, 211.0f, 1.6f)};
     l.candles = {ground(8.0f, -19.0f, 1.05f), ground(68.0f, 67.0f, 1.05f), ground(-58.0f, 93.0f, 1.05f)};
     l.lanterns = {ground(5.0f, -33.0f, 1.05f), ground(-33.5f, 42.5f, 1.05f), ground(-14.5f, 123.0f, 1.05f)};
     l.spirits = {ground(-21.5f, -16.0f, 0.0f), ground(59.5f, 64.5f, 0.0f), ground(-66.0f, 87.0f, 0.0f)};
@@ -148,13 +175,25 @@ bool World::excluded(glm::vec2 xz) const {
 }
 
 void World::addStatic(quench::PhysicsWorld& physics, const MeshData& mesh) {
+    if (mesh.indices.empty()) return;
+    // The triangles are kept around their middle: Jolt packs a mesh's bounds as half floats, too coarse 2 km up.
+    glm::vec3 low(1e30f), high(-1e30f);
+    for (const auto& v : mesh.vertices) {
+        low = glm::min(low, v.position);
+        high = glm::max(high, v.position);
+    }
+    const glm::vec3 middle = (low + high) * 0.5f;
     JPH::TriangleList triangles;
     triangles.reserve(mesh.indices.size() / 3);
     for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
         auto p = [&](std::size_t k) {
-            const glm::vec3 v = mesh.vertices[mesh.indices[i + k]].position;
+            const glm::vec3 v = mesh.vertices[mesh.indices[i + k]].position - middle;
             return JPH::Float3(v.x, v.y, v.z);
         };
+        const glm::vec3 a = mesh.vertices[mesh.indices[i]].position;
+        const glm::vec3 b = mesh.vertices[mesh.indices[i + 1]].position;
+        const glm::vec3 c = mesh.vertices[mesh.indices[i + 2]].position;
+        if (glm::length(glm::cross(b - a, c - a)) < 1e-6f) continue; // degenerate (a dome's crown)
         triangles.push_back(JPH::Triangle(p(0), p(1), p(2)));
     }
     JPH::MeshShapeSettings settings(triangles);
@@ -163,7 +202,7 @@ void World::addStatic(quench::PhysicsWorld& physics, const MeshData& mesh) {
         quench::log::error("game", "static mesh: {}", shape.GetError().c_str());
         return;
     }
-    const JPH::BodyCreationSettings body(shape.Get(), JPH::RVec3::sZero(), JPH::Quat::sIdentity(),
+    const JPH::BodyCreationSettings body(shape.Get(), JPH::RVec3(middle.x, middle.y, middle.z), JPH::Quat::sIdentity(),
                                          JPH::EMotionType::Static, quench::PhysicsLayers::kStatic);
     physics.bodies().CreateAndAddBody(body, JPH::EActivation::DontActivate);
 }
@@ -191,6 +230,11 @@ void World::buildIsle(render::Scene& scene, quench::PhysicsWorld& physics, const
             const glm::vec2 xz = d.centre + glm::vec2(std::cos(a), std::sin(a)) * edge * std::min(t, 0.9995f);
             const float h = isle.heightAt(xz).value_or(d.base - 1.6f);
             glm::vec3 color = isle.grassColor(xz);
+            // Steep ground shows its rock.
+            const float rock = smoothstep(0.7f, 1.05f, isle.slope(xz));
+            const float strata = fbm(glm::vec2(h * 0.8f, (xz.x + xz.y) * 0.05f), 2, d.seed + 41) * 0.5f + 0.5f;
+            color = lerpColor(color, lerpColor(srgb(150, 138, 120), srgb(116, 108, 100), strata), rock);
+            color *= shade(xz);
             // Darker grass over the lip, a little earth at its very edge.
             color = lerpColor(color, color * 0.72f, smoothstep(0.88f, 1.0f, t));
             color = lerpColor(color, srgb(112, 92, 68), smoothstep(0.985f, 1.0f, t) * 0.7f);
@@ -293,10 +337,11 @@ void World::buildFoliage(render::Scene& scene, const Isle& isle, float density) 
                     const std::optional<float> h = isle.heightAt(p);
                     if (!h) continue;
                     const bool far = (ix % 2 == 0) && (iz % 2 == 0);
-                    const glm::vec3 base = isle.grassColor(p);
+                    if (isle.slope(p) > 0.85f) continue;
+                    const glm::vec3 base = isle.grassColor(p) * shade(p);
                     const float meadow = fbm(p / 9.0f, 2, d.seed + 29) * 0.5f + 0.5f;
                     const float tall = glm::mix(0.12f, 0.32f, smoothstep(0.2f, 0.8f, meadow)) *
-                                       (1.0f - 0.5f * smoothstep(0.8f, 0.93f, t));
+                                       (1.0f - 0.5f * smoothstep(0.8f, 0.93f, t)) * glm::mix(0.3f, 1.0f, shade(p));
                     const glm::vec3 root(p.x - origin.x, *h - origin.y, p.y - origin.z);
                     const int blades = 5;
                     for (int b = 0; b < blades; ++b) {
@@ -541,6 +586,52 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
                glm::vec4(stoneColor(random), 1.0f));
         addBox(physics, c + kAlt + glm::vec3(0.0f, -0.05f, 0.0f), glm::vec3(3.6f, 0.15f, 3.6f), 0.0f);
     }
+    // Ruins on the far isles, for the views: a broken arch, a row of columns, a lone pair.
+    arch(glm::vec3(-122.0f, groundY(-122.0f, 34.0f), 34.0f), 1.1f, 4.0f, 3.2f);
+    for (int i = 0; i < 4; ++i) {
+        const glm::vec2 p(92.0f + float(i) * 2.6f, -58.0f + float(i) * 1.4f);
+        column(glm::vec3(p.x, groundY(p.x, p.y) - 0.1f, p.y), 2.2f + 0.9f * float((i * 7) % 3), 0.32f, i % 2 == 1);
+    }
+    for (int i = 0; i < 2; ++i) {
+        const glm::vec2 p(-88.0f + float(i) * 4.5f, -92.0f);
+        column(glm::vec3(p.x, groundY(p.x, p.y) - 0.1f, p.y), 3.4f, 0.34f, i == 1);
+    }
+    // The stair around the mesa: from the meadow ring below the way from the updraft, up along the cliff and in over
+    // a landing onto the top. Each step stands on its own block down to the ground.
+    {
+        const glm::vec2 mesa(10.0f, 218.0f);
+        const float start = std::atan2(128.0f - 218.0f, -20.0f - 10.0f) + 0.5f;
+        const int steps = 76;
+        const float sweep = 2.7f;
+        const float bottom = groundY(mesa.x + std::cos(start) * 25.0f, mesa.y + std::sin(start) * 25.0f);
+        const float top = groundY(mesa.x, mesa.y);
+        // The feet walk a smooth ramp through the steps' middles (the character would catch on each riser).
+        MeshData ramp;
+        for (int i = 0; i < steps; ++i) {
+            const float t = float(i) / float(steps - 1);
+            const float a = start + sweep * t;
+            const glm::vec2 dir(std::cos(a), std::sin(a));
+            const glm::vec2 xz = mesa + dir * 25.0f;
+            const float y = glm::mix(bottom + 0.2f, top - 0.05f, t);
+            const float floor = std::min(groundY(xz.x, xz.y), y) - 0.3f;
+            block(glm::vec3(xz.x, (y + floor) * 0.5f, xz.y), glm::vec3(1.25f, (y - floor) * 0.5f, 0.55f), -a, false);
+            const auto first = std::uint32_t(ramp.vertices.size());
+            for (const float r : {23.75f, 26.25f}) {
+                const glm::vec2 p = mesa + dir * r;
+                ramp.vertices.push_back({.position = glm::vec3(p.x, y - 0.12f, p.y) + kAlt});
+            }
+            if (i > 0)
+                ramp.indices.insert(ramp.indices.end(), {first - 2, first, first - 1, first - 1, first, first + 1});
+        }
+        addStatic(physics, ramp);
+        const float a = start + sweep;
+        for (int i = 0; i < 7; ++i) {
+            const glm::vec2 xz = mesa + glm::vec2(std::cos(a), std::sin(a)) * (23.6f - float(i) * 1.4f);
+            const float floor = std::min(groundY(xz.x, xz.y), top) - 0.3f;
+            block(glm::vec3(xz.x, (top - 0.05f + floor) * 0.5f, xz.y),
+                  glm::vec3(0.75f, (top - 0.05f - floor) * 0.5f, 1.3f), -a);
+        }
+    }
     // The temple: three round tiers, a ring of columns under a ring of stone, an altar.
     {
         const glm::vec3 c = m_landmarks.altar;
@@ -559,12 +650,12 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
         addStatic(physics, collider);
         for (int i = 0; i < 10; ++i) {
             const float a = kTau * float(i) / 10.0f;
-            column(c + glm::vec3(std::cos(a) * 5.4f, 1.2f, std::sin(a) * 5.4f), 5.2f, 0.36f, false);
+            column(c + glm::vec3(std::cos(a) * 5.4f, 1.2f, std::sin(a) * 5.4f), 6.2f, 0.4f, false);
         }
         MeshData ring = render::torusMesh(5.4f, 0.55f, 64, 12);
         for (Vertex& v : ring.vertices) v.position.y *= 0.6f;
         computeNormals(ring);
-        append(stones, ring, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 6.7f, 0.0f)),
+        append(stones, ring, glm::translate(glm::mat4(1.0f), c + kAlt + glm::vec3(0.0f, 7.7f, 0.0f)),
                glm::vec4(stoneColor(random), 1.0f));
         block(c + glm::vec3(0.0f, 1.6f, 0.0f), glm::vec3(0.8f, 0.4f, 0.8f), 0.0f);
     }
@@ -572,6 +663,154 @@ void World::buildRuins(render::Scene& scene, quench::PhysicsWorld& physics) {
     computeTangents(stones);
     if (Result<render::MeshId> id = scene.addMesh(stones.desc("ruins")))
         scene.addInstance({.mesh = *id, .material = m_stoneMaterial});
+}
+
+float World::shade(glm::vec2 xz) const {
+    const Landmarks& l = m_landmarks;
+    const float d = glm::distance(xz, glm::vec2(l.caveCentre.x, l.caveCentre.z));
+    float inside = 1.0f - smoothstep(l.caveRadius - 2.5f, l.caveRadius + 0.8f, d);
+    // Brighter toward the mouth and under the holes.
+    const glm::vec2 mouth(l.caveEntrance.x, l.caveEntrance.z);
+    inside *= 0.45f + 0.55f * smoothstep(1.0f, 6.0f, glm::distance(xz, mouth));
+    for (const glm::vec3& f : l.caveShafts)
+        inside *= 0.4f + 0.6f * smoothstep(0.8f, 2.6f, glm::distance(xz, glm::vec2(f.x, f.z)));
+    return 1.0f - 0.72f * inside;
+}
+
+void World::buildCave(render::Scene& scene, quench::PhysicsWorld& physics) {
+    const Landmarks& l = m_landmarks;
+    const glm::vec3 c = l.caveCentre;
+    const float radius = l.caveRadius + 0.6f;
+    const float height = l.caveHeight;
+    const glm::vec2 toMouth = glm::normalize(glm::vec2(l.caveEntrance.x - c.x, l.caveEntrance.z - c.z));
+    const float mouthAngle = std::atan2(toMouth.y, toMouth.x);
+    constexpr int segments = 80;
+    constexpr int rings = 20;
+    // A dome of rock: rings from the ground up to the crown, lumpy, its foot sunk into the floor.
+    MeshData shell;
+    std::vector<glm::vec2> params;
+    for (int r = 0; r <= rings; ++r) {
+        const float phi = 0.5f * kPi * float(r) / float(rings);
+        for (int k = 0; k <= segments; ++k) {
+            const float a = kTau * float(k % segments) / float(segments);
+            const glm::vec2 dir(std::cos(a), std::sin(a));
+            const float lump = fbm(dir * 1.9f + glm::vec2(phi * 1.7f, 3.0f), 3, 211u);
+            const float rr = radius * std::pow(std::max(std::cos(phi), 0.0f), 0.7f) * (1.0f + 0.14f * lump);
+            const float y =
+                c.y - 1.4f + height * std::sin(phi) * (1.0f + 0.1f * std::cos(phi) * fbm(dir * 2.3f + 7.0f, 2, 223u));
+            const float band = fbm(glm::vec2(y * 0.6f, a * 5.0f), 2, 227u) * 0.5f + 0.5f;
+            const glm::vec3 color = lerpColor(srgb(150, 140, 126), srgb(118, 112, 104), band);
+            shell.vertices.push_back({.position = glm::vec3(c.x + dir.x * rr, y, c.z + dir.y * rr) + kAlt,
+                                      .uv = glm::vec2(a * radius * 0.3f, y * 0.3f),
+                                      .color = glm::vec4(color, 1.0f)});
+            params.push_back({a, phi});
+        }
+    }
+    // The mouth (an arch toward the meadow) and the holes the light comes through.
+    auto open = [&](float a, float phi, glm::vec3 p) {
+        const float da = wrapAngle(a - mouthAngle) / 0.3f;
+        if (da * da + (phi / 0.62f) * (phi / 0.62f) < 1.0f) return true;
+        if (phi > 0.45f)
+            for (const glm::vec3& h : l.caveHoles)
+                if (glm::distance(glm::vec2(p.x, p.z), glm::vec2(h.x, h.z)) < 1.25f) return true;
+        return false;
+    };
+    for (int r = 0; r < rings; ++r)
+        for (int k = 0; k < segments; ++k) {
+            const auto a = std::uint32_t(r * (segments + 1) + k);
+            const auto b = a + std::uint32_t(segments + 1);
+            const glm::vec3 mid = (shell.vertices[a].position + shell.vertices[b + 1].position) * 0.5f - kAlt;
+            const glm::vec2 pa = (params[a] + params[b + 1]) * 0.5f;
+            if (open(pa.x, pa.y, mid)) continue;
+            // Counter-clockwise from outside.
+            shell.indices.insert(shell.indices.end(), {a, b, a + 1, a + 1, b, b + 1});
+        }
+    computeNormals(shell);
+    computeTangents(shell);
+    if (Result<render::MeshId> id = scene.addMesh(shell.desc("cave")))
+        scene.addInstance({.mesh = *id, .material = m_caveMaterial});
+    addStatic(physics, shell);
+
+    // Boulders that frame the mouth and hide the shell's edge there.
+    MeshData rocks;
+    Random random{229u};
+    auto boulder = [&](glm::vec3 at, glm::vec3 size) {
+        MeshData b = ellipsoid(size, 8, 12);
+        for (Vertex& v : b.vertices) {
+            const glm::vec3 n = glm::normalize(v.position / size);
+            v.position *= 1.0f + 0.18f * fbm(glm::vec2(n.x + n.y * 1.7f, n.z - n.y) * 2.2f + at.x, 2, 233u);
+        }
+        computeNormals(b);
+        append(rocks, b,
+               glm::translate(glm::mat4(1.0f), at + kAlt) *
+                   glm::rotate(glm::mat4(1.0f), random.uniform(0.0f, kTau), glm::vec3(0.0f, 1.0f, 0.0f)),
+               glm::vec4(lerpColor(srgb(150, 140, 126), srgb(120, 114, 106), random.uniform()), 1.0f));
+    };
+    for (const float side : {-1.0f, 1.0f})
+        for (int i = 0; i < 4; ++i) {
+            const float phi = 0.62f * float(i) / 3.4f;
+            const float a = mouthAngle + side * 0.3f * std::sqrt(std::max(0.0f, 1.0f - (phi / 0.62f) * (phi / 0.62f)));
+            const float rr = radius * std::pow(std::max(std::cos(phi), 0.0f), 0.7f);
+            const glm::vec3 p(c.x + std::cos(a) * rr, c.y - 0.6f + height * std::sin(phi), c.z + std::sin(a) * rr);
+            boulder(p, glm::vec3(0.85f, 0.7f, 0.8f) * random.uniform(0.7f, 1.05f));
+        }
+    for (int i = -1; i <= 1; ++i) {
+        const float a = mouthAngle + 0.12f * float(i);
+        const float rr = radius * std::pow(std::cos(0.6f), 0.7f);
+        boulder(glm::vec3(c.x + std::cos(a) * rr, c.y - 0.7f + height * std::sin(0.62f), c.z + std::sin(a) * rr),
+                glm::vec3(1.2f, 0.8f, 1.0f));
+    }
+    computeTangents(rocks);
+    if (Result<render::MeshId> id = scene.addMesh(rocks.desc("cave rocks")))
+        scene.addInstance({.mesh = *id, .material = m_caveMaterial});
+
+    // Glowing caps along the inside of the wall.
+    MeshData caps;
+    for (int i = 0; i < 26; ++i) {
+        const float a = mouthAngle + 0.5f + random.uniform(0.0f, kTau - 1.0f);
+        const float rr = radius * random.uniform(0.62f, 0.86f);
+        const glm::vec2 xz = glm::vec2(c.x, c.z) + glm::vec2(std::cos(a), std::sin(a)) * rr;
+        const float y = terrainHeight(xz).value_or(c.y);
+        const float h = random.uniform(0.08f, 0.22f);
+        MeshData stem = render::cylinderMesh(0.012f, h * 0.5f, 6);
+        append(caps, stem, glm::translate(glm::mat4(1.0f), glm::vec3(xz.x, y + h * 0.5f, xz.y) + kAlt),
+               glm::vec4(0.5f, 0.6f, 0.55f, 1.0f));
+        MeshData cap = ellipsoid(glm::vec3(0.05f, 0.025f, 0.05f) * random.uniform(0.8f, 1.6f), 5, 8);
+        append(caps, cap, glm::translate(glm::mat4(1.0f), glm::vec3(xz.x, y + h, xz.y) + kAlt), glm::vec4(1.0f));
+    }
+    if (Result<render::MeshId> id = scene.addMesh(caps.desc("glow caps")))
+        scene.addInstance({.mesh = *id, .material = m_glowCap, .castsShadows = false});
+}
+
+void World::addLights(render::Scene& scene) {
+    const Landmarks& l = m_landmarks;
+    for (const glm::vec3& p : l.lanterns)
+        scene.addLight({.type = render::LightType::Point,
+                        .color = glm::vec3(1.0f, 0.62f, 0.3f),
+                        .intensity = 3.0f,
+                        .position = p + kAlt,
+                        .range = 7.0f,
+                        .castsShadows = false});
+    for (std::size_t i = 0; i < l.caveHoles.size(); ++i) {
+        const glm::vec3 from = l.caveHoles[i] + glm::vec3(-0.4f, 1.8f, 0.2f);
+        const glm::vec3 dir = glm::normalize(l.caveShafts[i] - from);
+        scene.addLight({.type = render::LightType::Spot,
+                        .color = glm::vec3(1.0f, 0.9f, 0.7f),
+                        .intensity = 10.0f,
+                        .position = from + kAlt,
+                        .direction = dir,
+                        .range = 14.0f,
+                        .innerAngle = 0.1f,
+                        .outerAngle = 0.2f,
+                        .castsShadows = false});
+    }
+    // The cave's own dim green light, as from the moss.
+    scene.addLight({.type = render::LightType::Point,
+                    .color = glm::vec3(0.45f, 0.85f, 0.6f),
+                    .intensity = 2.4f,
+                    .position = l.caveCentre + glm::vec3(0.0f, 3.0f, 0.0f) + kAlt,
+                    .range = 12.0f,
+                    .castsShadows = false});
 }
 
 Result<void> World::build(render::Scene& scene, quench::PhysicsWorld& physics, render::SurfaceId world,
@@ -592,9 +831,18 @@ Result<void> World::build(render::Scene& scene, quench::PhysicsWorld& physics, r
         {.baseColor = {1.0f, 0.8f, 0.5f, 1.0f}, .emissive = {14.0f, 7.0f, 2.4f}, .shadows = render::ShadowMode::None});
     m_flameOff = scene.addMaterial({.baseColor = {0.9f, 0.86f, 0.78f, 1.0f}, .roughness = 0.6f});
 
+    render::MaterialDesc cave{
+        .surface = world, .baseColor = {1.0f, 1.0f, 1.0f, 1.0f}, .roughness = 0.9f, .doubleSided = true};
+    cave.params[0] = glm::vec4(3.0f, 0.0f, 0.0f, 0.0f);
+    m_caveMaterial = scene.addMaterial(cave);
+    m_glowCap = scene.addMaterial(
+        {.baseColor = {0.5f, 0.9f, 0.8f, 1.0f}, .emissive = {0.9f, 2.6f, 2.0f}, .shadows = render::ShadowMode::None});
+
     for (const Isle& isle : m_isles) buildIsle(scene, physics, isle);
     for (const Isle& isle : m_isles) buildFoliage(scene, isle, grassDensity);
     buildRuins(scene, physics);
+    buildCave(scene, physics);
+    addLights(scene);
 
     // The pond's water.
     {

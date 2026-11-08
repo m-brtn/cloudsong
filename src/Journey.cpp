@@ -8,7 +8,7 @@ namespace cloudsong {
 
 namespace {
 
-constexpr float kTakeRadius = 1.4f;   // m from the chest a light is gathered
+constexpr float kTakeRadius = 1.8f;   // m from the chest a light is gathered
 constexpr float kWarmRate = 2.5f;     // marks per second near a flame
 constexpr float kRestRate = 0.1f;     // marks per second standing anywhere: never stranded
 constexpr float kFlameHeight = 1.05f; // the flames stand about this high over the ground
