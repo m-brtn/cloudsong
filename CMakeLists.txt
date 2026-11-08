@@ -14,10 +14,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # The engine at a pinned commit. Working on the engine at the same time: configure with
 # -DFETCHCONTENT_SOURCE_DIR_QUENCH=<engine checkout>.
 include(FetchContent)
-# main after v0.11.0: the camera above the clouds, quench_weather_sounds() in games
+# main after v0.11.0: the camera above the clouds, quench_weather_sounds() in games, view rays far from the origin
 FetchContent_Declare(quench
     GIT_REPOSITORY https://github.com/m-brtn/Quench.git
-    GIT_TAG 0a1ace97a6564907ff54de71a041a3ee36553965)
+    GIT_TAG a66401aecc03bf9048f222d5c837d6549f8f383f)
 FetchContent_MakeAvailable(quench)
 
 # The host-tools preset builds only the engine's shader compiler and asset cooker (for the iOS builds).
