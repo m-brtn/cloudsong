@@ -1,0 +1,25 @@
+# The key views, captured for looking at (not checked against golden images):
+#   build/release/cloudsong --frame-size 1920x1080 --user-dir /tmp/cloudsong --script scenarios/views.txt
+# Captures go to the user directory's views/.
+wait 2.5
+capture views/start.png
+camera 3.14 0.05 2.6
+wait 0.5
+capture views/closeup.png
+teleport -28 8 22 -0.35
+camera -0.35 0.22 5.6
+wait 1.5
+capture views/edge.png
+view 15 13 4 8 30 205
+wait 0.5
+capture views/hill.png
+view 0 40 -70 0 -160 -700
+wait 0.5
+capture views/clouds.png
+view -12 80 170 10 70 218
+wait 0.5
+capture views/temple.png
+view 40 14 30 64 6 63
+wait 0.5
+capture views/cave.png
+quit

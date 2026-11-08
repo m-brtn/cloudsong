@@ -1,0 +1,21 @@
+# Smoke check (ctest `smoke`): the game starts on the meadow, the keyboard moves the player and a jump leaves the
+# ground, and the app quits cleanly. App time advances 1/120 s per frame in scripted runs.
+#   cloudsong --script scenarios/smoke.txt
+
+wait 0.5
+expect grounded == 1
+
+# W runs away from the camera (+z at the start).
+mark z
+down W
+wait 0.5
+up W
+expect d_z > 1.2
+
+mark y
+tap Space
+wait 0.2
+expect d_y > 0.5
+wait 1.0
+expect grounded == 1
+quit

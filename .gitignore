@@ -1,0 +1,11 @@
+build/
+dist/
+*.bmp
+*.png
+!icon/*.png
+imgui.ini
+.DS_Store
+compile_commands.json
+CMakeUserPresets.json
+!tests/golden/**/*.png
+!docs/images/*.png
