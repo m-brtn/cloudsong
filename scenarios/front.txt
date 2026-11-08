@@ -47,4 +47,15 @@ expect grounded == 1
 touch 1246 34
 wait 0.1
 expect screen == 2
+
+# The settings, play with the touch controls and the debug window, the title: no two items of one window shared an
+# ID in any frame of the run (the engine counts them in scripted runs).
+screen settings
+wait 0.2
+debug_ui on
+screen play
+wait 0.2
+screen title
+wait 0.2
+expect imgui_id_conflicts == 0
 quit

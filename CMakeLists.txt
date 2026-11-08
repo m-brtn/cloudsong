@@ -15,10 +15,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # -DFETCHCONTENT_SOURCE_DIR_QUENCH=<engine checkout>.
 include(FetchContent)
 # main after v0.11.0: the camera above the clouds, quench_weather_sounds() in games, view rays far from the origin,
-# particles and trails (stage 14)
+# particles and trails (stage 14), the clouds steady in motion, ImGui ID conflicts counted in scripted runs, trails
+# that fade where they point along the view
 FetchContent_Declare(quench
     GIT_REPOSITORY https://github.com/m-brtn/Quench.git
-    GIT_TAG 58047d0c007a4dbf5f2d0b1630ae51a87f8c42e1)
+    GIT_TAG 3ded5e81f2406a09c65e91af653d66dc7b75900b)
 FetchContent_MakeAvailable(quench)
 
 # The host-tools preset builds only the engine's shader compiler and asset cooker (for the iOS builds).
