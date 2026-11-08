@@ -40,8 +40,14 @@ DIST`, `aim X Z`, `view EX EY EZ TX TY TZ` / `view off`, `move X Y`, `jump down|
 layer|off|volumetric`, `quality low|medium|high`, `screen title|play|pause|settings`, `touch_controls on|off`,
 `mood KEY VALUES` (the light, sky and haze, for tuning), `debug_ui on|off`. Values: `x y z grounded glide energy
 max_energy lights candles warm awake walking seated nav_ready updraft ending screen quality render_scale altar_dist
-candle_dist spirit_far vx vy cape_up cape_back glow_draws`. Coordinates are local: the isles float at
-`kAltitude` (2200 m).
+candle_dist spirit_far vx vy cape_up cape_back glow_draws particles particle_systems trails wing_trail`
+(`particles` and `trails` as the renderer drew them; `wing_trail` 1 while the cape's ribbons are on). Coordinates are
+local: the isles float at `kAltitude` (2200 m).
+
+The light effects are the engine's particles and trails (`src/Particles.h`): the cape's ribbons while gliding or
+flapping, streams of light on looping courses over the meadow, round the temple and round the updraft's isle, the
+meadow's twinkling points round the camera (denser as the sun goes down), motes in the beam, the updraft and the cave;
+their counts follow the picture setting. The glow pass (`src/Glow.h`) draws the beams, the call's ring and halos.
 
 Packages: `tools/package.sh` (Release, ctest, `dist/Cloudsong-<version>-<hash>-macos.zip`, a smoke run from the
 unzipped app); `--ios` also builds the iOS app signed by a paid team (`--team ID` or `QUENCH_IOS_TEAM`, never written

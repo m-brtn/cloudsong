@@ -162,7 +162,7 @@ quench::Result<void> Particles::create(render::Scene& scene, const World& world,
                                                                          .lifetime = {2.5f, 5.0f},
                                                                          .speed = {0.0f, 0.08f},
                                                                          .spread = kPi,
-                                                                         .size = {0.035f, 0.08f},
+                                                                         .size = {0.05f, 0.11f},
                                                                          .noise = 0.08f,
                                                                          .noiseScale = 3.0f,
                                                                          .wind = 0.1f,
@@ -173,6 +173,7 @@ quench::Result<void> Particles::create(render::Scene& scene, const World& world,
                                                                          .twinkleRate = 0.8f,
                                                                          .twinkleSharpness = 2.5f,
                                                                          .softness = 0.15f,
+                                                                         .nearFade = 1.5f,
                                                                          .minPixels = 1.2f});
     if (!field) return quench::Error{field.error()};
     m_field = *field;
@@ -423,10 +424,12 @@ void Particles::emitField(render::Scene& scene, const World& world, const Frame&
         m_random = m_random * 1664525u + 1013904223u;
         return float(m_random >> 8) * (1.0f / 16777216.0f);
     };
-    constexpr float kRadius = 30.0f;
+    // In a ring round the eye: points nearer than its inside would be large soft discs on the screen.
+    constexpr float kInside = 5.0f, kRadius = 30.0f;
     m_spawns.clear();
     for (int i = 0; i < count; ++i) {
-        const float r = kRadius * std::sqrt(random()), a = 2.0f * kPi * random(), lift = random();
+        const float r = std::sqrt(kInside * kInside + (kRadius * kRadius - kInside * kInside) * random());
+        const float a = 2.0f * kPi * random(), lift = random();
         const glm::vec2 xz(f.eye.x + r * std::cos(a), f.eye.z + r * std::sin(a));
         const std::optional<float> ground = world.terrainHeight(xz);
         // Only over the meadows near the camera, not far below it.
