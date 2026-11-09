@@ -4,16 +4,19 @@ The JPEG files in this directory are in-game captures of Cloudsong. The project 
 this game's README and the [Quench engine showcase](https://github.com/m-brtn/Quench). Artwork sources and their
 terms remain in the [game credits](../../CREDITS.md), including the original Hyper3D character and world models.
 
-`cloudsong.jpg` was refreshed on 2026-11-09 from Cloudsong 0.1.1 after reducing the temple beacon's halo, using
-the published Quench 0.12.1 pin. It shows the starting meadow, carved
-ruins, player and floating islands. The capture uses native Metal on an Apple M4 Pro Mac, the Beautiful picture
-preset, frozen 11:30 daylight, the default picture effects and a fixed camera, with the interface hidden.
+`cloudsong.jpg` is the sunset view supplied by the project owner on 2026-11-09 as a README candidate. It shows the
+red-caped traveller, a flower meadow, winding paths and a hilltop pavilion above the clouds. The source attachment
+is `codex-clipboard-87caa8e4-46c1-47af-9f5d-3a80e717a4d3.png`; its exact runtime/capture settings were not recorded.
 
-The original is 1920 x 1080; the README image is resized to 1600 x 900 with Lanczos filtering and saved as an
-optimized JPEG at quality 90. No colour retouching or compositing. The same JPEG is used in Quench's README.
+The original is 2388 x 1286; the README image is resized to 1600 x 862 with Lanczos filtering and saved as an
+optimized JPEG at quality 90. No cropping, colour retouching or compositing. The same JPEG is used in Quench's README.
 The other JPEGs are retained captures from earlier game builds.
 
-## Reproduce the hero image
+## Automated daylight view
+
+The earlier README view of the starting ruins is still available through `scenarios/showcase.txt`. It uses
+the Beautiful preset, frozen 11:30 daylight and a fixed camera with the interface hidden. It is a different view
+from the user-supplied sunset image above.
 
 From the repository root, after building Release:
 

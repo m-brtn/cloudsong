@@ -5,7 +5,7 @@ cape on grassy isles that float above a sea of clouds. Walk, run, jump, glide an
 isles, gather drifting lights, light the old candles, wake the sleeping spirits and bring them to the temple of light.
 A short journey of about ten to fifteen minutes.
 
-![A red-caped traveller, flower-lined paths, carved ruins and floating islands](docs/images/cloudsong.jpg)
+![A red-caped traveller in a flower meadow, winding paths and a hilltop pavilion above the clouds at sunset](docs/images/cloudsong.jpg)
 
 | | |
 |---|---|

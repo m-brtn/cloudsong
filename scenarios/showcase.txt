@@ -1,4 +1,4 @@
-# README hero and Quench's example-game screenshot.
+# Alternate daylight showcase (the README currently uses the owner's sunset capture).
 # Run at 1920x1080 on native Metal; see docs/images/CREDITS.md.
 # Use the shipped Beautiful picture preset and normal daytime lighting.
 screen play
