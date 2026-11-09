@@ -1,0 +1,37 @@
+# Visual review of the temple landmark in daylight, at midnight and during the ending.
+# Run at 1280x720 or larger; captures are relative to --user-dir.
+screen play
+quality high
+day_cycle off
+touch_controls off
+debug_ui off
+until hero_ready == 1 10
+until nav_ready == 1 10
+view 4 2.6 -42 -10 7 8
+time_of_day 11.5
+wait 2
+expect sun_elevation > 59
+capture beacon/far-day.png
+time_of_day 0
+wait 2
+expect sun_elevation < -59
+capture beacon/far-night.png
+view 0 78 168 10 90 218
+wait 2
+capture beacon/near-night.png
+time_of_day 11.5
+wait 2
+capture beacon/near-day.png
+light 0
+light 1
+light 2
+time_of_day 0
+teleport 10 67 218 0
+until ending > 0 5
+wait 7
+view 0 78 168 10 90 218
+wait 2
+expect ending > 7
+expect hero_pose_valid == 1
+capture beacon/ending-night.png
+quit

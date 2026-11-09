@@ -475,32 +475,28 @@ public:
         const Landmarks& l = m_world.landmarks();
         const float bright =
             m_ending >= 0.0f ? smoothstep(2.0f, 7.0f, m_ending) * (0.5f + 0.5f * float(m_spirits.awake())) : 0.0f;
-        // The temple's beam: a hot white core, the beam round it, a wide soft glow seen from afar and a flare where it
-        // leaves the crown (the motes rising in it are particles).
+        // The temple stays a distant landmark: a narrow ivory core and a faint surrounding glow.
+        // Reduce emitted light after sunset rather than letting a daytime halo fill the dark sky.
         {
             const glm::vec3 base = l.beamBase + alt;
             const glm::vec3 top = base + glm::vec3(0.0f, 900.0f, 0.0f);
-            const float more = 1.0f + 1.2f * bright;
-            // From afar the glow widens with the distance, as it would through the eye's own haze.
-            const float far = glm::distance(glm::vec2(base.x, base.z), glm::vec2(eye().x, eye().z));
-            const float wide = smoothstep(40.0f, 220.0f, far);
-            m_glow.beam(base, 0.5f, top, 1.4f, glm::vec3(9.0f, 8.4f, 7.0f) * more, 0.005f, 0.5f, 1.0f);
-            m_glow.beam(base, 2.0f + 0.8f * bright + 1.5f * wide, top, 6.0f + 2.0f * bright,
-                        glm::vec3(3.2f, 2.6f, 1.7f) * more, 0.01f, 0.45f, 2.0f);
-            m_glow.beam(base, 7.0f + 2.0f * bright + 6.0f * wide, top, 40.0f,
-                        glm::vec3(1.1f, 0.85f, 0.55f) * more * (1.0f + 1.4f * wide), 0.02f, 0.3f, 3.0f);
+            const float daylight = smoothstep(0.0f, 25.0f, m_mood.sunElevation);
+            const float more = 1.0f + 0.4f * std::clamp(bright * 0.5f, 0.0f, 1.0f);
+            const float core = glm::mix(0.4f, 1.0f, daylight) * more;
+            const float halo = glm::mix(0.22f, 1.0f, daylight) * more;
+            m_glow.beam(base, 0.22f, top, 0.55f, glm::vec3(3.8f, 3.65f, 3.4f) * core, 0.005f, 0.5f, 1.0f);
+            m_glow.beam(base, 1.4f, top, 4.0f, glm::vec3(0.45f, 0.41f, 0.34f) * halo, 0.01f, 0.45f, 2.0f);
+            m_glow.beam(base, 5.0f, top, 14.0f, glm::vec3(0.085f, 0.078f, 0.065f) * halo, 0.02f, 0.3f, 3.0f);
             const glm::vec3 crown = base + glm::vec3(0.0f, 12.2f, 0.0f);
-            m_glow.sprite(crown, 5.0f, glm::vec3(2.0f, 1.65f, 1.1f) * more, 0.2f);
+            m_glow.sprite(crown, 1.6f, glm::vec3(0.8f, 0.75f, 0.65f) * core, 0.2f);
             // A streak of light across the crown, as through a lens.
             const glm::vec3 right = glm::vec3(inv[0]);
             const float away = glm::distance(crown, eye());
-            const float half = std::clamp(away * 0.12f, 8.0f, 60.0f), width = std::max(away * 0.0035f, 0.15f);
-            m_glow.beam(crown - right * half, width, crown + right * half, width, glm::vec3(2.4f, 2.0f, 1.4f) * more,
+            const float half = std::clamp(away * 0.055f, 3.0f, 14.0f);
+            const float width = std::clamp(away * 0.0007f, 0.05f, 0.14f);
+            m_glow.beam(crown - right * half, width, crown + right * half, width, glm::vec3(0.9f, 0.85f, 0.75f) * core,
                         0.5f, 0.5f, 4.0f);
         }
-        if (bright > 0.0f)
-            m_glow.beam(l.beamBase + alt, 0.6f + 0.6f * bright, l.beamBase + alt + glm::vec3(0.0f, 60.0f, 0.0f),
-                        1.6f + 1.5f * bright, glm::vec3(3.0f, 2.5f, 1.7f) * bright, 0.01f, 0.85f, 5.0f);
         if (m_ending >= 2.0f) {
             // Rings of light rise from the altar.
             for (int k = 0; k < 3; ++k) {

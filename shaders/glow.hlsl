@@ -73,6 +73,8 @@ float4 glow_fs(GlowOut i) : SV_Target0 {
         const float t = i.local.y;
         a = exp(-side * side * 3.5) * smoothstep(0.0, max(glow.params.z, 1e-3), t) *
             (1.0 - smoothstep(glow.params.w, 1.0, t));
+        // Reach zero at the strip boundary, including against a dark night sky.
+        a *= 1.0 - smoothstep(0.65, 1.0, abs(side));
         // Dust in the light, drifting.
         const float time = glow.params.y;
         a *= 0.75 + 0.25 * sin(t * 37.0 - time * 0.9 + side * 2.0) * sin(t * 13.0 + time * 0.4);
