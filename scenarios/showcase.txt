@@ -1,0 +1,17 @@
+# README hero and Quench's example-game screenshot.
+# Run at 1920x1080 on native Metal; see docs/images/CREDITS.md.
+# Use the shipped Beautiful picture preset and normal daytime lighting.
+screen play
+quality high
+day_cycle off
+time_of_day 11.5
+touch_controls off
+debug_ui off
+until hero_ready == 1 10
+until nav_ready == 1 10
+wait 2
+view 4 2.6 -42 -10 7 8
+wait 2
+expect hero_pose_valid == 1
+capture cloudsong.png
+quit

@@ -5,7 +5,7 @@ cape on grassy isles that float above a sea of clouds. Walk, run, jump, glide an
 isles, gather drifting lights, light the old candles, wake the sleeping spirits and bring them to the temple of light.
 A short journey of about ten to fifteen minutes.
 
-![The title over the meadow](docs/images/title.jpg)
+![A red-caped traveller, flower-lined paths, carved ruins and floating islands](docs/images/cloudsong.jpg)
 
 | | |
 |---|---|
