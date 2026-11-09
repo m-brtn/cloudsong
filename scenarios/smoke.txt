@@ -14,7 +14,8 @@ expect d_z > 1.2
 
 mark y
 tap Space
-wait 0.2
+# 130 ms anticipation, then takeoff.
+wait 0.3
 expect d_y > 0.5
 wait 1.0
 expect grounded == 1

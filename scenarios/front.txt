@@ -5,10 +5,15 @@
 screen title
 wait 0.5
 expect screen == 0
-# Space begins from the title.
+# Space begins from the title without moving the capsule or preparing a jump.
+mark y
 tap Space
 wait 0.1
 expect screen == 1
+expect grounded == 1
+expect jump_crouch == 0
+expect d_y < .01
+expect d_y > -.01
 wait 1.0
 
 # Escape rests and resumes; resting holds the player still.
@@ -45,12 +50,43 @@ gamepad button a up
 wait 0.1
 # A genuinely new press still jumps.
 gamepad button a down
-wait 0.15
+wait 0.25
 expect grounded == 0
 gamepad button a up
 until grounded == 1 3
 gamepad detach
 wait 0.1
+
+# Mouse Begin also preserves the settled title pose.
+screen title
+wait .2
+mark y
+click 50% 60%
+wait .2
+expect screen == 1
+expect grounded == 1
+expect jump_crouch == 0
+expect d_y < .01
+expect d_y > -.01
+# A held gamepad Begin cannot prepare a jump either.
+screen title
+gamepad attach
+wait .2
+gamepad button dpdown tap
+wait .1
+gamepad button dpup tap
+wait .1
+mark y
+gamepad button a down
+wait .3
+expect screen == 1
+expect grounded == 1
+expect jump_crouch == 0
+expect d_y < .01
+expect d_y > -.01
+gamepad button a up
+gamepad detach
+wait .1
 
 # The quality's render settings.
 quality low

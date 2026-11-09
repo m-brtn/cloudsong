@@ -1,0 +1,111 @@
+screen play
+day_cycle off
+time_of_day 12
+until hero_ready == 1 10
+until nav_ready == 1 10
+# Check the final terrain after intersecting routes, pads and bridge cuts.
+expect path_max_grade <= .32
+expect path_max_cross_slope <= .08
+wait 2
+view 2 4 -42 -12 4 -10
+capture region/start.png
+view -41 9 -14 -103 12 28
+wait 1
+capture region/bridge.png
+view -85 17 4 -104 17 28
+wait 1
+capture region/sanctuary.png
+view -103 16 17 -104 18 28
+wait 1
+capture region/sanctuary-close.png
+view -80 52 -43 -114 14 36
+wait 1
+capture region/west.png
+view 90 22 34 143 22 75
+wait 1
+capture region/east.png
+view 159 48 103 202 47 155
+wait 1
+capture region/high-gardens.png
+view 10 93 290 25 35 130
+wait 1
+capture region/archipelago.png
+# Player-height views of the previously broken junctions, apron and foundation.
+view -8 4.5 -28 -17 1.5 -23
+wait .5
+capture region/junction-close.png
+view -35 4 -6 -49 0 -1
+wait .5
+capture region/bridge-approach-close.png
+view -49 3 6 -49 0 -1
+wait .5
+capture region/bridge-side-close.png
+view -64 2 -4 -55 -1 -1
+wait .5
+capture region/bridge-landing-close.png
+view -92 16 26 -104 16 28
+wait .5
+capture region/sanctuary-landing-close.png
+view -137 8 3 -140 4 11
+wait .5
+capture region/rim-close.png
+# On the bridge's midpoint: collision, settling and a walk across to the new meadow.
+view off
+teleport -49.5 10 -1 -1.570796
+camera -1.570796 .2 4
+wait 3
+expect grounded == 1
+expect hero_pose_valid == 1
+move 0 1
+wait 3
+move 0 0
+expect x < -57
+expect grounded == 1
+capture region/bridge-walk.png
+# The eastern bridge also meets both banks and remains walkable through its far landing.
+teleport 96.5 20 56 1.570796
+camera 1.570796 .2 4
+wait 3
+expect grounded == 1
+move 0 1
+wait 3
+move 0 0
+expect x > 107
+expect grounded == 1
+capture region/east-bridge-walk.png
+# Climb the sanctuary approach; its grade and level landing belong to the terrain collision.
+teleport -90 30 30 -1.57
+camera -1.57 .2 3
+wait 3
+expect grounded == 1
+aim -104 28
+move 0 1
+wait 3
+move 0 0
+expect x < -100
+expect grounded == 1
+capture region/steps-walk.png
+# Shared model and physics: stand on the generated sanctuary floor.
+teleport -104 25 28 0
+wait 3
+expect grounded == 1
+expect hero_pose_valid == 1
+view off
+teleport -175 20 65 0
+wait 3
+camera 0 .15 4
+time_of_day 0
+wait 1
+capture region/night.png
+view off
+teleport -40 30 70 -.5
+camera -.5 .2 3
+move 0 1
+jump down
+wait 1.6
+capture region/trails-night.png
+time_of_day 12
+wait .3
+capture region/trails-day.png
+jump up
+quit

@@ -1,0 +1,54 @@
+# Real mesh collision through the cottage door and the cave mouth; no hidden ramps.
+screen play
+day_cycle off
+time_of_day 12
+until hero_ready == 1 10
+until bird_ready == 1 10
+teleport 65.35 7 58.5 0
+camera 0 .15 3
+wait 2
+expect grounded == 1
+move 0 1
+wait 1.4
+move 0 0
+expect z > 62
+expect grounded == 1
+expect y > 4.1
+expect y < 4.7
+view_place interior
+capture places/interior.png
+view_place house
+capture places/house.png
+view_place bird
+mark bird_phase
+wait .4
+expect d_bird_phase > .001
+capture places/bird.png
+view off
+teleport 202 30 130 0
+camera 0 .12 3
+wait 2
+expect grounded == 1
+move 0 1
+wait 2.5
+move 0 0
+expect z > 139
+expect grounded == 1
+expect y > 27.9
+expect y < 28.3
+expect hero_pose_valid == 1
+view_place cave
+capture places/cave.png
+view_place fossil
+capture places/fossil.png
+view off
+move 0 -1
+wait 2.5
+move 0 0
+expect z < 134
+expect grounded == 1
+view_place ruins
+capture places/ruins.png
+view_place court
+capture places/court.png
+quit

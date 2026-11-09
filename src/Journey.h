@@ -16,6 +16,7 @@ inline constexpr int kStartMarks = 2;
 inline constexpr int kMaxMarks = 8;
 
 struct JourneyEvents {
+    int chimeTaken = -1;
     int lightTaken = -1; // the light gathered in this step
     int candleLit = -1;  // the candle the call lit in this step
 };
@@ -26,6 +27,9 @@ public:
     // One fixed step. `feet`: the player's feet (local); `called`: the call was made in this step.
     JourneyEvents step(float dt, Player& player, glm::vec3 feet, bool called);
 
+    std::size_t chimesTaken() const;
+    bool windSong() const { return chimesTaken() >= 3; }
+    float chimeAge(std::size_t i) const { return m_chimeAge[i]; }
     std::size_t lightsTaken() const;
     bool lightTaken(std::size_t light) const { return m_lightAge[light] >= 0.0f; }
     // Seconds since the light was taken (negative: not taken).
@@ -40,7 +44,7 @@ public:
 
 private:
     const Landmarks* m_landmarks = nullptr;
-    std::vector<float> m_lightAge;
+    std::vector<float> m_lightAge, m_chimeAge;
     std::vector<bool> m_candleLit;
     bool m_warm = false;
 };

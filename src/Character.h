@@ -79,9 +79,13 @@ struct PoseInput {
     float speed = 0.0f; // horizontal speed (m/s)
     bool grounded = true;
     float verticalSpeed = 0.0f;
+    float airTime = 0.0f;
+    float jumpCrouch = 0.0f, landingCrouch = 0.0f;
+    float levitate = 0.0f;           // upright water-skimming pose
     float glide = 0.0f;              // 0..1: the glide pose
     float flap = 0.0f;               // 0..1: time into a flap's stroke (0 or 1: none)
     float sit = 0.0f;                // 0..1: sitting (a dormant spirit, the ending)
+    float music = 0.0f;              // resident playing the wind harp
     float pray = 0.0f;               // 0..1: arms raised (calling)
     std::optional<glm::vec3> lookAt; // world point
     glm::vec3 wind{0.0f};            // the air's velocity at the figure (m/s)
@@ -104,6 +108,8 @@ public:
     // Advances the gait and the cape by dt and computes the joints' matrices.
     void update(float dt, const PoseInput& input, const GroundQuery& ground);
 
+    void setBodyBind(const std::array<glm::vec3, kBodyJoints>& rest);
+    glm::mat4 modelJoint(Joint joint) const { return m_model[std::size_t(joint)]; }
     glm::mat4 transform() const { return m_world; }
     std::span<const glm::mat4> palette() const { return m_palette; }
     glm::vec3 jointWorld(Joint joint) const;
@@ -120,6 +126,7 @@ private:
     void simulateCape(float dt, glm::vec3 wind, float wings, float swing);
 
     CharacterLook m_look;
+    bool m_importedBody = false;
     std::array<glm::vec3, kJointCount> m_bind{}; // bind pose joint positions (model space)
     std::array<int, kBodyJoints> m_parent{};
     std::array<glm::mat4, kJointCount> m_model{}; // posed joints (model space)
@@ -144,6 +151,8 @@ private:
     std::array<float, kCapeRows> m_rowWidth{};
     bool m_clothValid = false;
     int m_halfStep = 0;
+    int m_jumpLead = 0;
+    bool m_wasGrounded = true;
     bool m_stepped = false;
     glm::vec3 m_lastFeet{0.0f};
 };

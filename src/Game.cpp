@@ -1,12 +1,17 @@
 // Cloudsong: a small caped figure wanders floating isles of grass above a sea of clouds through the day, glides
 // between them, gathers drifting lights, lights candles, wakes the spirits and brings them to the temple of light.
 
+#include "Bird.h"
 #include "Character.h"
 #include "Front.h"
 #include "Glow.h"
+#include "Hero.h"
 #include "Journey.h"
+#include "MeadowLife.h"
+#include "MusicKeeper.h"
 #include "Particles.h"
 #include "Physics.h"
+#include "Picture.h"
 #include "Player.h"
 #include "Settings.h"
 #include "Sound.h"
@@ -148,33 +153,35 @@ public:
 
         // The player.
         const Landmarks& l = m_world.landmarks();
-        const glm::vec3 start = l.start + glm::vec3(0.0f, kAltitude + 0.05f, 0.0f);
+        glm::vec3 start = l.start + glm::vec3(0.0f, kAltitude + 0.05f, 0.0f);
         m_player.create(*m_physics, start, l.startYaw);
+        start = m_player.position();
         m_previous = m_current = start;
         {
             CharacterLook look;
             look.cape = srgb(214, 88, 70);
             look.capeInner = srgb(140, 46, 40);
             look.capeLength = 0.92f;
-            CharacterMesh mesh = Character::buildMesh(look);
-            render::MeshDesc desc = mesh.mesh.desc("player");
-            desc.skin = mesh.skin;
-            desc.jointCount = kJointCount;
-            Result<render::MeshId> id = m_scene->addMesh(desc);
-            if (!id) return Error{id.error()};
-            render::MaterialDesc figure{.surface = *world, .roughness = 0.8f, .doubleSided = true};
-            figure.params[0] = glm::vec4(2.0f, 0.0f, 0.0f, 0.0f);
-            m_figureMaterial = m_scene->addMaterial(figure);
             m_figure = Character(look);
             m_figure.setPlacement(start, l.startYaw);
-            m_figureInstance =
-                m_scene->addInstance({.mesh = *id, .material = m_figureMaterial, .transform = m_figure.transform()});
+            m_hero.create(*m_scene, app.assets(), *world, m_figure, app.jobs(),
+                          [this](const glm::vec3& from, float reach) { return footGround(*m_physics, from, reach); });
         }
+        if (Result<void> architecture = m_world.loadArchitecture(m_hero.sceneAssets(), *m_physics); !architecture)
+            return Error{architecture.error()};
+        if (auto life = m_meadow.create(*m_scene, *world, m_hero.sceneAssets(), m_hero.animationSystem(), m_world);
+            !life)
+            return Error{life.error()};
+        m_bird.create(m_hero.sceneAssets(), m_hero.animationSystem(), l.cottage + glm::vec3(-2.0f, 1.16f, -4.9f));
+        quench::log::info("game", "cottage floor {}, cave floor {}, temple floor {}", l.cottage.y + .53f,
+                          l.caveCentre.y, l.altar.y);
+        m_physics->optimizeBroadPhase();
         m_camera.reset(start + glm::vec3(0.0f, kPivot, 0.0f), l.startYaw);
         m_journey.reset(l);
         if (Result<void> spirits = m_spirits.create(*m_scene, *world, l, m_world.takeNavGeometry(), app.jobs());
             !spirits)
             return Error{spirits.error()};
+        if (auto resident = m_keeper.create(*m_scene, *world, l); !resident) return Error{resident.error()};
         m_sound.init(app.audio());
         if (Result<void> particles = m_particles.create(*m_scene, m_world, m_settings.quality); !particles)
             return Error{particles.error()};
@@ -187,7 +194,7 @@ public:
         ws.coverage = 0.7f;
         ws.type = weather::CloudType::Cumulus;
         ws.typeVariation = 0.3f;
-        ws.cirrus = 0.35f;
+        ws.cirrus = 0.12f;
         ws.wind = {.direction = {1.0f, 0.35f}, .speed = 4.0f, .gusts = 0.3f, .turbulence = 0.15f};
         ws.evolution = 0.4f;
         ws.featureSize = 3200.0f;
@@ -203,6 +210,7 @@ public:
         }
 
         m_glow.attach(*m_renderer, app.device());
+        m_picture.attach(*m_renderer, app.device());
 
         // The titles' font (Marcellus, SIL Open Font License; assets/fonts/OFL.txt); ImGui's own without it.
         if (Result<fs::Bytes> font = fs::readAsset("fonts/Marcellus-Regular.ttf"); font && !font->empty()) {
@@ -268,6 +276,10 @@ public:
         in.cameraYaw = m_camera.yaw;
         const Landmarks& l = m_world.landmarks();
         const glm::vec3 local = m_current - glm::vec3(0.0f, kAltitude, 0.0f);
+        const float waterDistance = glm::distance(glm::vec2(local.x, local.z), glm::vec2(l.pond.x, l.pond.z));
+        const auto shore = m_world.terrainHeight({local.x, local.z});
+        if (waterDistance < l.pondRadius + .55f && shore && *shore < l.pond.y + .07f)
+            in.waterSurface = l.pond.y + kAltitude;
         // The updraft, once every candle burns: it carries the player up to the height of the temple.
         if (const glm::vec2 off(local.x - l.updraft.x, local.z - l.updraft.z);
             updraftOpen() && glm::length(off) < l.updraftRadius * (local.y > l.updraft.y + 2.0f ? 1.6f : 1.0f) &&
@@ -295,13 +307,28 @@ public:
         if (called) {
             m_callAge = 0.0f;
             m_sound.call();
+            m_keeper.call(feet);
+            if (m_journey.windSong() && m_player.beginWindSong()) {
+                m_flapPending = true;
+                m_flash = 1.0f;
+            }
         }
+        m_meadow.step(float(dt), feet, m_player.velocity());
         const JourneyEvents events = m_journey.step(float(dt), m_player, feet, called);
         if (events.lightTaken >= 0) {
             m_flash = 1.6f;
             m_sound.lightTaken(int(m_journey.lightsTaken()));
         }
         if (events.candleLit >= 0) candleLit(events.candleLit);
+        if (events.chimeTaken >= 0) {
+            m_chimeNoticeAge = 0.0f;
+            m_sound.chimeTaken(int(m_journey.chimesTaken()));
+        }
+        m_chimeNoticeAge += float(dt);
+        if (const int note = m_keeper.step(float(dt)); note >= 0)
+            m_sound.harpNote(note, m_keeper.position() + glm::vec3(0, kAltitude, 0));
+        if (m_keeper.answering() && m_keeper.nearby(feet))
+            m_player.energy = std::min(float(m_player.maxEnergy), m_player.energy + float(dt) * 1.5f);
         // The end: standing at the altar.
         if (m_ending < 0.0f && m_player.grounded() &&
             glm::length(glm::vec2(feet.x - l.altar.x, feet.z - l.altar.z)) < 3.2f &&
@@ -327,6 +354,7 @@ public:
 
     void update(App& app, double frameDt) override {
         const float dt = float(frameDt);
+        m_pictureDt = dt;
         m_time += dt;
         const app::Input& input = app.input();
         updateScreen(app, dt);
@@ -342,7 +370,9 @@ public:
         if (m_settings.invertLook) look.y = -look.y;
         if (m_scriptCamera || m_screen != Screen::Playing) look = glm::vec2(0.0f);
 
-        const glm::vec3 feet = glm::mix(m_previous, m_current, float(app.alpha()));
+        // Interpolate the small displacement: mixing two absolute heights at
+        // 2200 m can round even identical endpoints to different positions.
+        const glm::vec3 feet = m_previous + (m_current - m_previous) * float(app.alpha());
         if (m_ending >= 0.0f) {
             // The closing moment: the camera turns slowly round the altar, drawing back and up past the columns.
             const glm::vec3 altar = m_world.landmarks().altar + glm::vec3(0.0f, kAltitude, 0.0f);
@@ -359,8 +389,12 @@ public:
         // The figure.
         PoseInput pose;
         pose.speed = glm::length(glm::vec2(m_player.velocity().x, m_player.velocity().z));
-        pose.grounded = m_player.grounded();
+        pose.grounded = m_player.grounded() && m_player.levitate() < .08f;
+        pose.levitate = m_player.levitate();
         pose.verticalSpeed = m_player.velocity().y;
+        pose.airTime = m_player.airTime();
+        pose.jumpCrouch = m_player.jumpCrouch();
+        pose.landingCrouch = m_player.landingCrouch();
         pose.glide = m_player.glide();
         pose.flap = m_player.flap();
         pose.wind = m_weather.windAt(feet + glm::vec3(0.0f, 0.8f, 0.0f)) * 0.3f;
@@ -368,10 +402,9 @@ public:
         const float pitch = m_player.glide() * 1.1f;
         m_figure.setPlacement(feet, m_player.yaw(), pitch);
         m_figure.update(dt, pose, [this](glm::vec3 from) { return groundBelow(*m_physics, from, 1.2f); });
-        m_scene->setTransform(m_figureInstance, m_figure.transform());
-        m_scene->setJointPalette(m_figureInstance, m_figure.palette());
-        if (m_figure.stepped()) m_sound.footstep(m_world.groundAt(feet - glm::vec3(0.0f, kAltitude, 0.0f)), pose.speed);
+
         if (m_ending >= 0.0f && m_screen == Screen::Playing) m_ending += dt;
+        m_keeper.draw(m_screen == Screen::Playing ? dt : 0, feet, *m_scene);
         m_spirits.update(
             dt, {.feet = feet, .yaw = m_player.yaw(), .grounded = m_player.grounded(), .airTime = m_player.airTime()},
             *m_scene, *m_physics);
@@ -388,8 +421,15 @@ public:
         }
         m_flash = std::max(0.0f, m_flash - dt * 2.0f);
         if (m_player.flapped()) m_flash = 1.0f;
-        m_scene->setInstanceColor(m_figureInstance, glm::vec4(1.0f),
-                                  glm::vec4(m_player.energy, float(m_player.maxEnergy), m_flash, 0.0f));
+        m_bird.update(m_screen == Screen::Playing);
+        m_meadow.prepare(m_screen == Screen::Playing);
+        m_hero.update(m_figure, pose, dt, m_player.energy, m_player.maxEnergy, m_flash);
+        m_meadow.draw(float(app.alpha()));
+        const std::array garmentMotion = {m_hero.capeMotionSpeed(), m_hero.hoodMotionSpeed(), m_hero.capeJitter(),
+                                          m_hero.hoodJitter()};
+        for (std::size_t i = 0; i < garmentMotion.size(); ++i)
+            m_garmentAuditPeak[i] = std::max(m_garmentAuditPeak[i], garmentMotion[i]);
+        if (m_hero.stepped()) m_sound.footstep(m_world.groundAt(feet - glm::vec3(0.0f, kAltitude, 0.0f)), pose.speed);
 
         if (m_callAge < 50.0f) {
             if (m_callAge == 0.0f) {
@@ -403,15 +443,17 @@ public:
         m_weather.update(frameDt);
         m_scene->setWeather(m_weather);
         m_world.updateDetail(*m_scene, eye());
+        for (std::size_t i = 0; i < m_world.landmarks().chimes.size(); ++i)
+            m_world.setChime(*m_scene, i, m_journey.chimeAge(i), m_time);
         {
             // The cape's ribbons while flying or gliding, the call's guide, the meadow's twinkling field.
             Particles::Frame pf;
             pf.time = double(m_time);
             pf.dt = dt;
             pf.eye = eye();
-            pf.capeLeft = m_figure.capeSurface({0.02f, 0.97f}).first;
-            pf.capeRight = m_figure.capeSurface({0.98f, 0.97f}).first;
-            pf.capeCentre = m_figure.capeSurface({0.5f, 0.97f}).first;
+            pf.capeLeft = m_hero.trail(0);
+            pf.capeRight = m_hero.trail(1);
+            pf.capeCentre = m_hero.trail(2);
             pf.velocity = m_player.velocity();
             // Gliding or carried up by a flap, not a fall.
             pf.flying = m_screen == Screen::Playing && !m_player.grounded() &&
@@ -478,7 +520,8 @@ public:
             for (int k = 0; k < std::min(count, int(kMarkUv.size())); ++k) {
                 const float lit = std::clamp(energy - float(k), 0.0f, 1.0f);
                 if (lit <= 0.0f) continue;
-                const auto [at, out] = figure.capeSurface(kMarkUv[std::size_t(k)]);
+                const auto [at, out] =
+                    (&figure == &m_figure ? m_hero.mark(k) : figure.capeSurface(kMarkUv[std::size_t(k)]));
                 m_glow.sprite(at + out * 0.02f * figure.scale(), 0.085f * figure.scale(),
                               glm::vec3(1.4f, 1.0f, 0.45f) * lit * markHalo * (1.0f + 1.5f * flash), 0.3f);
             }
@@ -539,7 +582,21 @@ public:
             const float since = m_time - m_begunAt;
             const float fade = smoothstep(1.5f, 2.5f, since) * (1.0f - smoothstep(10.0f, 11.5f, since)) +
                                smoothstep(12.5f, 13.5f, since) * (1.0f - smoothstep(22.0f, 24.0f, since));
-            if (fade > 0.0f && m_ending < 0.0f) m_menus.hint(controlsHint(app), fade);
+            if (m_ending < 0.0f) {
+                const auto count = m_journey.chimesTaken();
+                if (count > 0)
+                    m_menus.windProgress(int(count), int(m_world.landmarks().chimes.size()), m_player.windCooldown());
+                if (m_keeper.nearby(m_player.position() - glm::vec3(0, kAltitude, 0)))
+                    m_menus.hint(m_keeper.answering() ? "The keeper's song restores your light."
+                                                      : "Call to the keeper and share a song.",
+                                 1.0f);
+                else if (m_chimeNoticeAge < 7.0f && count <= 3)
+                    m_menus.hint(count < 3 ? "Gather three wind chimes to awaken a song."
+                                           : "Wind song awakened. Call while gliding to ride a gust.",
+                                 1.0f - smoothstep(5.0f, 7.0f, m_chimeNoticeAge));
+                else if (fade > 0.0f)
+                    m_menus.hint(controlsHint(app), fade);
+            }
             if (m_touchUi && m_ending < 0.0f) m_touch.draw(1.0f);
         }
         if (m_screen != Screen::Title && m_beginFade < 1.0f) m_menus.title(m_settings, 1.0f - m_beginFade, canQuit);
@@ -572,16 +629,24 @@ public:
                                 .nearPlane = 0.1f,
                                 .cut = m_cut,
                                 .time = double(m_time)};
+        const auto pictureTarget =
+            m_picture.begin(frame.target, frame.output, m_settings.motionBlur, m_settings.colourBoost, m_pictureDt,
+                            m_screen == Screen::Playing && !m_cut && !m_menus.settingsOpen());
         m_cut = false;
-        m_renderer->render(*m_scene, view, frame.commands, frame.target, frame.output);
+        m_renderer->render(*m_scene, view, frame.commands, pictureTarget, frame.output);
+        m_picture.finish(frame.commands, frame.target);
     }
 
     void shutdown(App& app) override {
         (void)app;
         m_glow.detach();
+        m_picture.detach();
         m_sound.shutdown();
         m_spirits.destroy();
         m_player.destroy();
+        m_meadow.destroy();
+        m_bird.destroy();
+        m_hero.destroy();
         m_scene.reset();
         m_renderer.reset();
         m_physics.reset();
@@ -591,6 +656,48 @@ public:
 
     std::optional<double> scenarioValue(std::string_view name) const override {
         const glm::vec3 p = m_player.position() - glm::vec3(0.0f, kAltitude, 0.0f);
+        if (name == "levitate") return m_player.levitate();
+        if (name == "picture_blur") return m_picture.blurActive() ? 1 : 0;
+        if (name == "water_clearance") return m_player.position().y - kAltitude - m_world.landmarks().pond.y;
+        if (name == "creature_ready") return m_meadow.ready() ? 1 : 0;
+        if (name == "creature_attention") return m_meadow.state();
+        if (name == "creature_distance")
+            return glm::distance(m_meadow.position(), m_player.position() - glm::vec3(0, kAltitude, 0));
+        if (name == "creature_speed") return m_meadow.speed();
+        if (name == "bubble_pushes") return m_meadow.pushes();
+        if (name == "bubble_speed") return m_meadow.bubbleSpeed();
+        if (name == "keeper_answers") return m_keeper.answers();
+        if (name == "keeper_answering") return m_keeper.answering() ? 1 : 0;
+        if (name == "ship_x") return m_world.shipPosition().x;
+        if (name == "ship_z") return m_world.shipPosition().z;
+        if (name == "jump_crouch") return m_player.jumpCrouch();
+        if (name == "landing_crouch") return m_player.landingCrouch();
+        if (name == "hero_knee_bend") return m_hero.kneeBend();
+        if (name == "hero_foot_clearance") return m_hero.footClearance();
+        if (name == "hero_toe_flex") return m_hero.toeFlex();
+        if (name == "hero_feet_lateral_error") return m_hero.feetLateralError();
+        if (name == "hero_facing_forward") return m_hero.facingForward();
+        if (name == "hero_jump_leg_separation") return m_hero.jumpLegSeparation();
+        if (name == "hero_animated") return m_hero.animated() ? 1.0 : 0.0;
+        if (name == "hero_toe_slope_error") return m_hero.toeSlopeError();
+        if (name == "hero_ground_slope") return m_hero.groundSlope();
+        if (name == "hero_hood_bend") return m_hero.hoodBend();
+        if (name == "hero_cape_motion") return m_hero.capeMotionSpeed();
+        if (name == "hero_hood_motion") return m_hero.hoodMotionSpeed();
+        if (name == "hero_cape_jitter") return m_hero.capeJitter();
+        if (name == "hero_hood_jitter") return m_hero.hoodJitter();
+        if (name == "hero_cape_motion_peak") return m_garmentAuditPeak[0];
+        if (name == "hero_hood_motion_peak") return m_garmentAuditPeak[1];
+        if (name == "hero_cape_jitter_peak") return m_garmentAuditPeak[2];
+        if (name == "hero_hood_jitter_peak") return m_garmentAuditPeak[3];
+        if (name == "hero_knees_forward") return m_hero.kneesForward();
+        if (name == "hero_feet_forward") return m_hero.feetForward();
+        if (name == "hero_pose_valid") return m_hero.validPose() ? 1.0 : 0.0;
+        if (name == "path_max_grade") return m_world.pathMaxGrade();
+        if (name == "path_max_cross_slope") return m_world.pathMaxCrossSlope();
+        if (name == "bird_ready") return m_bird.ready() ? 1.0 : 0.0;
+        if (name == "bird_phase") return m_bird.phase();
+        if (name == "hero_ready") return m_hero.ready() ? 1.0 : 0.0;
         if (name == "settings_open") return m_menus.settingsOpen() ? 1.0 : 0.0;
         if (name == "time_of_day") return m_settings.timeOfDay;
         if (name == "day_cycle") return m_settings.dayNightCycle ? 1.0 : 0.0;
@@ -611,11 +718,16 @@ public:
         if (name == "guide_dist") return m_particles.guideDistance();
         if (name == "guide_goal") return m_guideGoal;
         if (name == "lights") return double(m_journey.lightsTaken());
+        if (name == "chimes") return double(m_journey.chimesTaken());
+        if (name == "chime_total") return double(m_world.landmarks().chimes.size());
+        if (name == "wind_song_unlocked") return m_journey.windSong() ? 1.0 : 0.0;
+        if (name == "wind_song") return m_player.windSong();
+        if (name == "wind_cooldown") return m_player.windCooldown();
         if (name == "candles") return double(m_journey.candlesLit());
         if (name == "warm") return m_journey.warm() ? 1.0 : 0.0;
-        if (name == "cape_up") return m_figure.capePoint(kCapeRows - 1).y - m_figure.capePoint(0).y;
+        if (name == "cape_up") return m_hero.trail(2).y - m_figure.jointWorld(kChest).y;
         if (name == "cape_back") {
-            const glm::vec3 d = m_figure.capePoint(kCapeRows - 1) - m_figure.capePoint(0);
+            const glm::vec3 d = m_hero.trail(2) - m_figure.jointWorld(kChest);
             return -(d.x * std::sin(m_player.yaw()) + d.z * std::cos(m_player.yaw()));
         }
         if (name == "vx")
@@ -658,6 +770,92 @@ public:
     app::ScenarioExec scenarioCommand(App& app, const app::ScenarioCommand& command) override {
         const auto& a = command.args;
         auto f = [&](std::size_t i) { return parseFloat(a[i]); };
+        if (command.op == "garment_audit_reset" && a.empty()) {
+            m_garmentAuditPeak.fill(0);
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "visit_chime" && a.size() == 1) {
+            const auto i = std::size_t(std::max(0.0f, f(0)));
+            if (i >= m_world.landmarks().chimes.size()) return app::ScenarioExec::Unknown;
+            const auto p = m_world.landmarks().chimes[i] + glm::vec3(0, kAltitude - .75f, 0);
+            m_player.teleport(p, 0);
+            m_previous = m_current = p;
+            m_figure.setPlacement(p, 0);
+            m_figure.resetCape();
+            m_camera.reset(p + glm::vec3(0, kPivot, 0), 0);
+            m_trailJump = m_cut = true;
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "visit_glade") {
+            auto p = m_world.landmarks().meadowGlade;
+            if (a.size() >= 2)
+                p += glm::vec3(f(0), .05f, f(1));
+            else
+                p += glm::vec3(0, .05f, -3.0f);
+            p += glm::vec3(0, kAltitude, 0);
+            m_player.teleport(p, 0);
+            m_previous = m_current = p;
+            m_figure.setPlacement(p, 0);
+            m_figure.resetCape();
+            m_camera.reset(p + glm::vec3(0, kPivot, 0), 0);
+            m_trailJump = m_cut = true;
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "visit_bubble" && !a.empty()) {
+            const auto bubble = m_meadow.bubble(int(f(0)));
+            const auto p = glm::vec3(bubble.x, m_world.terrainHeight({bubble.x, bubble.z}).value_or(bubble.y) + .05f,
+                                     bubble.z - 1.5f) +
+                           glm::vec3(0, kAltitude, 0);
+            m_player.teleport(p, 0);
+            m_previous = m_current = p;
+            m_figure.setPlacement(p, 0);
+            m_figure.resetCape();
+            m_camera.reset(p + glm::vec3(0, kPivot, 0), 0);
+            m_trailJump = m_cut = true;
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "view_place" && !a.empty()) {
+            const auto& l = m_world.landmarks();
+            glm::vec3 eye, target;
+            if (a[0] == "interior") {
+                eye = l.cottage + glm::vec3(1.35f, 1.65f, -1.5f);
+                target = l.cottage + glm::vec3(-.4f, 1.25f, 1.6f);
+            } else if (a[0] == "house") {
+                eye = l.cottage + glm::vec3(9, 6, -12);
+                target = l.cottage + glm::vec3(0, 2.3f, 0);
+            } else if (a[0] == "bird") {
+                eye = l.cottage + glm::vec3(-1.5f, 1.52f, -7.1f);
+                target = l.cottage + glm::vec3(-2.0f, 1.38f, -4.9f);
+            } else if (a[0] == "cave") {
+                eye = l.caveEntrance + glm::vec3(0, 1.6f, -7);
+                target = l.caveCentre + glm::vec3(0, 1.3f, 0);
+            } else if (a[0] == "fossil") {
+                eye = l.caveCentre + glm::vec3(1.5f, 1.7f, -4);
+                target = l.caveCentre + glm::vec3(-.3f, .8f, 1.4f);
+            } else if (a[0] == "glade") {
+                eye = l.meadowGlade + glm::vec3(7, 4, -9);
+                target = l.meadowGlade + glm::vec3(0, .7f, 0);
+            } else if (a[0] == "creature") {
+                const float yaw = m_meadow.yaw() + .45f;
+                eye = m_meadow.position() + glm::vec3(std::sin(yaw) * 2.2f, .95f, std::cos(yaw) * 2.2f);
+                target = m_meadow.position() + glm::vec3(0, .4f, 0);
+            } else if (a[0] == "ruins") {
+                const glm::vec3 c(4, m_world.terrainHeight({4, -22}).value_or(0), -22);
+                eye = c + glm::vec3(8, 5, -10);
+                target = c + glm::vec3(0, 1, 0);
+            } else if (a[0] == "court") {
+                eye = l.musicCourt + glm::vec3(4.7f, 2, -6);
+                target = l.musicCourt + glm::vec3(0, 1.4f, 1.4f);
+            } else
+                return app::ScenarioExec::Unknown;
+            m_scriptCamera = std::pair{eye + glm::vec3(0, kAltitude, 0), target + glm::vec3(0, kAltitude, 0)};
+            m_cut = true;
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "hero_pose" && a.size() == 1 && (a[0] == "bind" || a[0] == "animated")) {
+            m_hero.setBindPose(a[0] == "bind");
+            return app::ScenarioExec::Done;
+        }
         if (command.op == "day_cycle" && a.size() == 1 && (a[0] == "on" || a[0] == "off")) {
             m_settings.dayNightCycle = a[0] == "on";
             return app::ScenarioExec::Done;
@@ -736,6 +934,11 @@ public:
                         : a[0] == "off" ? render::Clouds::Off
                                         : render::Clouds::Volumetric;
             m_renderer->setSettings(rs);
+            return app::ScenarioExec::Done;
+        }
+        if (command.op == "picture_effects" && a.size() == 2) {
+            m_settings.motionBlur = std::clamp(f(0), 0.f, 1.f);
+            m_settings.colourBoost = std::clamp(f(1), 0.f, .3f);
             return app::ScenarioExec::Done;
         }
         if (command.op == "mood" && a.size() >= 2) {
@@ -871,9 +1074,12 @@ private:
                                   .color = day.sunColor * m.sunTint * m.sunScale,
                                   .direction = -m_towardSun});
         render::Environment env = day.environment;
-        env.atmosphere = m.atmosphere;
-        env.skyZenith *= m.zenith;
-        env.skyHorizon *= m.horizon;
+        // A clear blue daytime sky, fading back to the existing twilight/night palette.
+        // Keep cloud lighting and ambient fill separate: white clouds must not inherit a blue colour filter.
+        const float clearDay = smoothstep(8.0f, 25.0f, m.sunElevation);
+        env.atmosphere = glm::mix(0.35f, m.atmosphere, clearDay);
+        env.skyZenith *= glm::mix(glm::vec3(.48f, 1.05f, 1.35f), m.zenith, clearDay);
+        env.skyHorizon *= glm::mix(glm::vec3(.55f, 1.05f, 1.25f), m.horizon, clearDay);
         env.sunGlow *= m.glow;
         env.sunDisc *= m.glow;
         const float fill = glm::dot(env.skyAmbient, glm::vec3(0.2126f, 0.7152f, 0.0722f));
@@ -1026,6 +1232,9 @@ private:
         rs.vignette = 0.22f;
         switch (m_settings.quality) {
         case Quality::High:
+            rs.ambientOcclusion = render::AmbientOcclusion::ScreenSpace;
+            rs.occlusionRadius = .8f;
+            rs.occlusionStrength = .65f;
             rs.renderScale = 1.0f;
             rs.clouds = render::Clouds::Volumetric;
             rs.cloudResolution = 0.5f;
@@ -1037,6 +1246,9 @@ private:
             rs.reflections = render::Reflections::ScreenSpace;
             break;
         case Quality::Medium:
+            rs.ambientOcclusion = render::AmbientOcclusion::ScreenSpace;
+            rs.occlusionRadius = .8f;
+            rs.occlusionStrength = .55f;
             rs.renderScale = 0.85f;
             rs.clouds = render::Clouds::Volumetric;
             rs.cloudResolution = 0.35f;
@@ -1048,6 +1260,7 @@ private:
             rs.reflections = render::Reflections::Sky;
             break;
         case Quality::Low:
+            rs.ambientOcclusion = render::AmbientOcclusion::None;
             rs.renderScale = 0.7f;
             rs.clouds = render::Clouds::Layer;
             rs.shadowCascades = 2;
@@ -1070,8 +1283,8 @@ private:
         float sunElevation = 60.0f, sunAzimuth = 180.0f; // degrees: ahead and to the right on the way to the temple
         glm::vec3 sunTint{1.0f, 1.0f, 1.0f};
         float sunScale = 1.0f;
-        float atmosphere = 0.35f;
-        glm::vec3 zenith{0.48f, 1.05f, 1.35f}, horizon{0.55f, 1.05f, 1.25f}, glow{1.0f, 1.0f, 1.0f}; // daylight tints
+        float atmosphere = 0.12f;
+        glm::vec3 zenith{0.16f, 0.72f, 1.5f}, horizon{0.3f, 0.85f, 1.3f}, glow{1.0f, 1.0f, 1.0f}; // daylight tints
         glm::vec3 ambientTint{0.9f, 1.0f, 1.08f}; // a cool fill against the warm sun
         float ambient = 1.3f;
         float fogDensity = 0.00055f, fogMax = 0.9f;
@@ -1084,8 +1297,11 @@ private:
     std::optional<PhysicsWorld> m_physics;
     World m_world;
     Glow m_glow;
+    Picture m_picture;
+    float m_pictureDt = 0;
     Particles m_particles;
     bool m_flapPending = false, m_trailJump = false;
+    std::array<float, 4> m_garmentAuditPeak{};
     weather::Weather m_weather;
     render::SurfaceId m_worldSurface;
     render::LightId m_sun;
@@ -1098,9 +1314,11 @@ private:
     float m_safeYaw = 0.0f;
     float m_safeTimer = 0.0f;
     Character m_figure;
-    render::MaterialId m_figureMaterial;
-    render::InstanceId m_figureInstance;
+    Hero m_hero;
+    Bird m_bird;
+    MeadowLife m_meadow;
     float m_flash = 0.0f;
+    float m_chimeNoticeAge = 100.0f;
     CameraRig m_camera;
     std::optional<std::pair<glm::vec3, glm::vec3>> m_scriptCamera;
     bool m_cut = true;
@@ -1127,6 +1345,7 @@ private:
     int m_guideGoal = -1; // where the last call's guide flew (guideGoal)
     Journey m_journey;
     Spirits m_spirits;
+    MusicKeeper m_keeper;
     Sound m_sound;
     float m_ending = -1.0f; // seconds since the end began
     ImFont* m_font = nullptr;

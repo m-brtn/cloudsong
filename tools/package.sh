@@ -5,11 +5,12 @@
 #                               CREDITS.md and the engine's LICENSE and THIRD_PARTY_LICENSES; then unzips it, runs
 #                               the smoke scenario from the unzipped app (offscreen) and saves a capture next to it
 #   tools/package.sh --ios      also builds the iOS app (ios-xcode, Automatic signing by a paid team: --team ID or
-#                               QUENCH_IOS_TEAM) into dist/Cloudsong-<version>-<hash>-ios/cloudsong.app; installs nothing
+#                               QUENCH_IOS_TEAM) into dist/Cloudsong-<version>-<hash>-ios/ with an IPA; installs nothing
 #   --no-checks                 skips ctest
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 DIST="$ROOT/dist"
 IOS=0
 CHECKS=1
@@ -62,6 +63,17 @@ for f in "$ENGINE/LICENSE" "$ENGINE/THIRD_PARTY_LICENSES" "$ROOT/CREDITS.md"; do
     cp "$f" "$APP/Contents/Resources/"
     cp "$f" "$STAGE/"
 done
+cp "$ROOT/art/world/windgarden/CREDITS.md" "$APP/Contents/Resources/WorldAssetCredits.md"
+cp "$ROOT/art/world/windgarden/CREDITS.md" "$STAGE/WorldAssetCredits.md"
+cat >"$STAGE/BUILD-INFO.txt" <<EOF
+Cloudsong $VERSION
+Game revision: $HASH
+Full game commit: $(git -C "$ROOT" rev-parse HEAD)
+Quench commit: $(git -C "$ENGINE" rev-parse HEAD)
+Built UTC: $(date -u '+%Y-%m-%d %H:%M:%S')
+A revision ending in -dirty includes uncommitted changes.
+EOF
+cp "$STAGE/BUILD-INFO.txt" "$APP/Contents/Resources/BUILD-INFO.txt"
 
 ICONSET="$(mktemp -d -t cloudsong_icon)/Cloudsong.iconset"
 mkdir -p "$ICONSET"
@@ -138,6 +150,7 @@ if [[ $IOS -eq 1 ]]; then
         -destination generic/platform=iOS -allowProvisioningUpdates -quiet build
     IOS_APP="$(find "$XBUILD" -name cloudsong.app -path '*Release-iphoneos*' -maxdepth 3 | head -n 1)"
     [[ -d "$IOS_APP" ]] || fail "no cloudsong.app under $XBUILD"
+    diff -qr "$XBUILD/quench_game/cloudsong/assets" "$IOS_APP/assets" || fail "stale iOS bundle assets"
     codesign --verify --deep --strict "$IOS_APP"
     SIGNATURE="$(codesign -dvv "$IOS_APP" 2>&1)"
     grep -qx "TeamIdentifier=$TEAM" <<<"$SIGNATURE" || fail "the iOS app is not signed by the team"
@@ -145,5 +158,18 @@ if [[ $IOS -eq 1 ]]; then
     rm -rf "$DIST/$NAME-ios"
     mkdir -p "$DIST/$NAME-ios"
     cp -R "$IOS_APP" "$DIST/$NAME-ios/"
+    for f in "$ENGINE/LICENSE" "$ENGINE/THIRD_PARTY_LICENSES" "$ROOT/CREDITS.md" "$STAGE/BUILD-INFO.txt"; do
+        cp "$f" "$DIST/$NAME-ios/"
+    done
+    cp "$ROOT/art/world/windgarden/CREDITS.md" "$DIST/$NAME-ios/WorldAssetCredits.md"
+    IPA_STAGE="$(mktemp -d -t cloudsong_ipa)"
+    trap 'rm -rf "$IPA_STAGE"' EXIT
+    mkdir -p "$IPA_STAGE/Payload"
+    ditto "$DIST/$NAME-ios/cloudsong.app" "$IPA_STAGE/Payload/cloudsong.app"
+    IPA="$DIST/$NAME-ios/Cloudsong.ipa"
+    ditto -c -k --norsrc --noextattr --noqtn --keepParent "$IPA_STAGE/Payload" "$IPA"
+    unzip -q "$IPA" -d "$IPA_STAGE/verified"
+    codesign --verify --deep --strict "$IPA_STAGE/verified/Payload/cloudsong.app"
+    shasum -a 256 "$IPA"
     echo "iOS app: $DIST/$NAME-ios/cloudsong.app"
 fi

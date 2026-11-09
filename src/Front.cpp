@@ -200,6 +200,11 @@ MenuAction Menus::settingsPanel(Settings& settings) {
             action = MenuAction::SettingsChanged;
     };
     ImGui::Dummy(ImVec2(0.0f, 2.0f * s));
+    float blur = settings.motionBlur * 100.0f, colour = settings.colourBoost * 100.0f;
+    slider("Motion blur", "##motion_blur", blur, 0.0f, 100.0f, "%.0f %%");
+    slider("Colour boost", "##colour_boost", colour, 0.0f, 30.0f, "%.0f %%");
+    settings.motionBlur = blur / 100.0f;
+    settings.colourBoost = colour / 100.0f;
     float music = settings.music * 100.0f, effects = settings.effects * 100.0f;
     slider("Music", "##music", music, 0.0f, 100.0f, "%.0f %%");
     slider("Sounds", "##effects", effects, 0.0f, 100.0f, "%.0f %%");
@@ -247,6 +252,29 @@ void Menus::hint(const char* text, float alpha) {
     // Above the touch controls on phones.
     const float h = ImGui::GetMainViewport()->Size.y;
     centredText(m_font, text, 22.0f * s, m_touch ? h * 0.12f : h - 64.0f * s, alpha * 0.9f);
+    ImGui::End();
+}
+
+void Menus::windProgress(int count, int total, float cooldown) {
+    const float s = scale();
+    beginScreen("##wind_progress", false);
+    const auto vp = ImGui::GetMainViewport();
+    // Keep the top right corner free for the touch pause button.
+    const ImVec2 at(vp->Pos.x + 28 * s, vp->Pos.y + 26 * s);
+    auto* draw = ImGui::GetWindowDrawList();
+    draw->AddCircle(ImVec2(at.x + 9 * s, at.y + 12 * s), 8 * s, IM_COL32(247, 219, 154, 235), 32, 2 * s);
+    draw->AddCircleFilled(ImVec2(at.x + 9 * s, at.y + 12 * s), 2 * s, IM_COL32(200, 237, 219, 235));
+    pushFont(m_font, 21 * s);
+    ImGui::SetCursorScreenPos(ImVec2(at.x + 28 * s, at.y));
+    ImGui::TextColored(ImVec4(1, .95f, .81f, .95f), "%d / %d", count, total);
+    ImGui::PopFont();
+    if (count >= 3) {
+        const float ready = 1 - std::clamp(cooldown / 5.0f, 0.0f, 1.0f);
+        draw->AddLine(ImVec2(at.x, at.y + 33 * s), ImVec2(at.x + 92 * s, at.y + 33 * s), IM_COL32(247, 219, 154, 65),
+                      2 * s);
+        draw->AddLine(ImVec2(at.x, at.y + 33 * s), ImVec2(at.x + 92 * s * ready, at.y + 33 * s),
+                      IM_COL32(247, 219, 154, 230), 2 * s);
+    }
     ImGui::End();
 }
 

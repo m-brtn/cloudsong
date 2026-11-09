@@ -26,7 +26,14 @@ Changes that can behave differently on a phone: run on the device, or ask the us
 
 The checks (`ctest`, all offscreen, their files in `build/<preset>/captures/`): `smoke` (keys move and jump), `flight`
 (glide and flap between isles), `journey` (the whole way, candles, spirits on the navmesh, the updraft, the end),
-`settings` (saved preferences and compatibility), `daylight` (frozen/running time, midnight, pause and settings),
+`windgarden` (collectible uniqueness, three-chime unlock, grounded/airborne activation, pause and cooldown),
+`meadow` (creature approach/wait/release, both bubble pushes and pause), `water` (animated water entry, hover,
+shore landing, jump without flap energy, pause), `places` (cottage doorway and cave traversal, bird idle),
+`region` (expanded landscape captures, bridge traversal, sanctuary collision, day/night trails),
+`hero` (imported model/textures, finite skinning/attachments and forward-facing boots through run, glide, flap and landing),
+`garments` (a complete idle loop, movement, settling and glide; per-frame peak motion and jitter of the cape and hood),
+`settings` (saved preferences and compatibility), `picture` (camera blur eligibility, menus, resize, quality switches
+and bypass), `daylight` (frozen/running time, midnight, pause and settings),
 `sound` (the mix measured: levels, the call's pitch, footsteps, no clipping), `guide` (the call's guide: none before
 a call, then toward the next goal, lingering, gone after its fade, one at a time, circling at the goal; the particles
 and trails per picture setting in its log), `front` (the title, resting, the
@@ -41,10 +48,13 @@ before and after a change in the same session, not frame rates on a display).
 Game scenario commands (besides the engine's): `teleport X Y Z [YAW]`, `camera YAW PITCH DIST`, `orbit DYAW PITCH
 DIST`, `aim X Z`, `view EX EY EZ TX TY TZ` / `view off`, `move X Y`, `jump down|up`, `call`, `light I`, `clouds
 layer|off|volumetric`, `quality low|medium|high`, `screen title|play|pause|settings`, `touch_controls on|off`,
-`time_of_day HOUR`, `day_cycle on|off`, `day_length MINUTES`,
-`mood KEY VALUES` (the light, sky and haze, for tuning; fog is a tint of the daylight fog), `debug_ui on|off`. Settings scenario points: `@morning`, `@noon`, `@evening`, `@day_cycle_toggle`, `@settings_back`
-(visible controls only; scroll first when needed). Values: `settings_open time_of_day day_cycle sun_elevation x y z grounded glide energy
-max_energy lights candles warm awake walking seated nav_ready updraft ending screen quality render_scale altar_dist
+`time_of_day HOUR`, `day_cycle on|off`, `day_length MINUTES`, `picture_effects BLUR COLOUR` (0..1, 0..0.3),
+`hero_pose bind|animated` (rig diagnosis),
+`mood KEY VALUES` (the light, sky and haze, for tuning; fog is a tint of the daylight fog), `debug_ui on|off`,
+`visit_chime I` (teleport to an item, without granting it),
+`garment_audit_reset` (clear the per-frame peak garment motion and jitter). Settings scenario points: `@morning`, `@noon`, `@evening`, `@day_cycle_toggle`, `@settings_back`
+(visible controls only; scroll first when needed). Values: `hero_ready hero_animated hero_facing_forward hero_jump_leg_separation hero_knee_bend hero_feet_lateral_error hero_foot_clearance hero_toe_flex path_max_grade path_max_cross_slope jump_crouch landing_crouch hero_pose_valid hero_feet_forward hero_knees_forward hero_hood_bend hero_cape_motion hero_hood_motion hero_cape_jitter hero_hood_jitter hero_cape_motion_peak hero_hood_motion_peak hero_cape_jitter_peak hero_hood_jitter_peak hero_ground_slope hero_toe_slope_error settings_open time_of_day day_cycle sun_elevation x y z grounded glide energy
+max_energy lights chimes chime_total wind_song_unlocked wind_song wind_cooldown candles warm awake walking seated nav_ready updraft ending screen quality render_scale altar_dist
 candle_dist spirit_far vx vy cape_up cape_back glow_draws particles particle_systems trails wing_trail guide
 guide_dist guide_goal` (`particles` and `trails` as the renderer drew them; `wing_trail` 1 while the cape's ribbons
 are on; `guide` 1 while the call's guide is out, `guide_dist` from its first head to its goal, 0 while it circles the
@@ -60,9 +70,16 @@ picture setting. The glow pass (`src/Glow.h`) draws the beams, the call's ring, 
 creatures by every other light until it is gathered. Lanterns and candles use emissive flame meshes with bloom
 and local illumination, without large sprite halos.
 
+`Picture` reads depth in PostHdr and draws a final camera-motion/colour pass before the UI. Its separate target
+must never be written into the renderer's TAA history. Camera blur uses a short fixed exposure, a bounded sample
+span and depth rejection at silhouettes; it is off for menus, cuts and stalls. `picture_blur` reports eligibility,
+not the magnitude of motion. No object-motion blur is generated. The pass supports SDR and Apple's extended-linear
+HDR; it bypasses HDR10/PQ, and skips blur if an upscaler does not expose depth. Zeroing both settings bypasses it.
+
 Packages: `tools/package.sh` (Release, ctest, `dist/Cloudsong-<version>-<hash>-macos.zip`, a smoke run from the
-unzipped app); `--ios` also builds the iOS app signed by a paid team (`--team ID` or `QUENCH_IOS_TEAM`, never written
-into files) into `dist/`; installing it on a phone is a separate step, only when the user asks.
+unzipped app); `--ios` also builds the iOS app and IPA signed by a paid team (`--team ID` or `QUENCH_IOS_TEAM`, never written
+into files) into `dist/`. Packages include `BUILD-INFO.txt` with game and engine commits; the iOS bundle's assets
+must match the mobile staging directory. Installing it on a phone is a separate step, only when the user asks.
 
 ## Engine
 
@@ -87,3 +104,79 @@ into files) into `dist/`; installing it on a phone is a separate step, only when
   from what was not verified.
 - Every asset needs a licence that allows its use, recorded in a `CREDITS.md` next to the files.
 - Commit and push only when the user asks; never commit `build/`, captures or secrets.
+
+## Imported player
+
+`art/character-v3/export/hero-rigged.glb` is the untouched approved Hyper3D export. `prepared/hero.glb` is its
+normalized game source, cooked with embedded textures by `quench_cook_assets`. `tools/prepare_hero.py` (offline,
+Python with NumPy and Pillow) regenerates that source and `src/HeroData.h`. Keep them together. The tool keeps the
+strongest four of the export's 16 influences, corrects its misplaced hood chain, restricts central tunic arm
+weights, rebinds the cape independently of limbs, welds skin weights across UV seams, and projects separate energy
+marks onto the cape. The knee bind planes face forward; boot shafts and heels stay rigid while ToeBase bends
+only the forefoot. The original export and provenance remain intact.
+`Hero` retains the model through `SceneAssets` and plays the audited idle/jog torso and arm rhythm through
+`AnimationSystem`. `tools/prepare_hero_motion.py` prepares in-place loops. The stock sideways run, obstacle jump
+and asymmetric walking clip are not selected by the gameplay graph. Foot support, heel rise and knee-lifting
+return arcs share the jog phase, with per-foot terrain placement. The ankle/heel use Foot, the tall boot shaft
+stays on Leg, and ToeBase flexes the forefoot only. Jump phases are anticipation, extension, an asymmetric
+leading-knee tuck, and landing compression. Forward knee poles prevent axial retargeting twists.
+The imported cape uses a constrained particle cage with inertia, air drag, bending limits and body collision.
+Cape and hood simulations use a fixed 120 Hz clock and a nearby translation-only origin, avoiding millimetre
+rounding feedback at the isles' 2200 m altitude. Interpolated poses follow the current sewn body frames; wind is
+filtered and synthetic flutter is limited to movement/flight. Front overlapping panels remain predominantly on
+the torso. Motion metrics are maximum cage speeds relative to Chest/Head in m/s; jitter is the residual after
+an 80 ms velocity filter. Peak metrics accumulate every frame until `garment_audit_reset`. Cloth mobility tapers over 12 cm of mesh distance
+from sewn body boundaries; triangular cage weights keep the four-influence skin continuous. The narrower folded hood crown has a separate
+three-segment cloth chain, while the face and aperture stay fixed to Head. The spirits keep Character's original
+cloth and procedural body. Trail/glow anchors follow the imported skin. `scenarios/hero.txt` checks full run phases,
+actual foot clearance and toe flex, slope placement, jumps and finite garment/attachment transforms.
+
+## Region architecture
+
+`src/Region.cpp` authors the side routes, graded road profiles, bridge decks, foundation pads and garden masonry;
+`World.cpp` owns the 17-isle terrain and its collision mesh. Paths are a signed-distance field on the terrain's
+own triangles, so junctions cannot overlap in depth. Profiles keep their landing heights and limit longitudinal
+grade; cross-sections are level and blend into shoulders. Bridge decks and their bank cuts use the same profile.
+Rock and turf share the exact rim boundary. Overlapping lower islands retain their own ungraded terrain and
+foliage heights. Foliage excludes paths, bridge decks and building foundations;
+new-isle flora has a separate density budget and patches beyond 115 m are hidden. The northern flower meadow uses
+foliage `custom.w` for restrained night emission.
+The original Rodin sanctuary is `art/world/sanctuary/sanctuary.glb`, cooked as `sanctuary.qmodel`. Rendering shares
+the hero's single `SceneAssets` owner; collision decodes the same cooked model during world initialization.
+Do not create a second SceneAssets for the same AssetManager. Provenance: `art/world/sanctuary/CREDITS.md`.
+
+## Windgarden
+
+`art/world/windgarden` preserves the generated willow and wind-harp PBR exports and provenance. The world cooks
+and shares one asset per type. `layoutGarden()` keeps roots off roads, away from spirits/ponds and on gentle
+ground; the same placements drive cleared grass, rendering and mesh collision. Large flat-topped hills have
+three shelves, and island underside rings close at a common height instead of splitting into needle triangles.
+Twelve gold-ring chimes are distinct from the original light balls. Journey tracks collection once per run;
+three unlock Player’s 1.2 s glide gust with a 5 s cooldown, activated by the existing call input.
+The folded hood rest mesh, its corrected bind chain, HeroData and prepared motion source must be regenerated
+together by both preparation scripts. Runtime springs preserve this rest silhouette rather than crushing a cone.
+
+## Authored places and residents
+
+The cottage entrance has three low wooden steps and no ramp. Bird source/rig
+`bd0f8ae7-5d72-4c2b-ac1c-e5ef9fd437cb` was explicitly selected by the user despite its feet; `bird.glb` equals
+`bird-source.glb` byte-for-byte. Do not reshape its feet or switch to later rejected birds. Its enlarged cage
+sits at cottage offset (-2, 0, -4.9), outside the porch/planters; bird yaw is pi so it faces away from the porch.
+The original Idle Standing clip plays through the shared animation system.
+
+`MeadowLife` owns the curious quadruped, bounded wandering/approach behavior, two buoyant pushable soap bubbles
+and short violet eye trails attached to the animated Head palette. It shares Hero's SceneAssets and
+AnimationSystem, preparing parameters before the system's single update and drawing after it. Simulation and
+clip time pause with the menu. The approved source and rig are in the windgarden credits.
+
+Pond levitation is a Player state with a damped height target, no teleport. Entry raises the feet, leaving water
+settles them briefly onto the bank, and jumping exits without spending flap energy. Character blends a one-leg
+tuck with spread arms; Hero's cloth continues to simulate. The optional water elevation is supplied only over
+the visible pond where the ground is submerged. It does not apply over the cloud sea. The sailboat is a static
+model beside the pond centre, with matching mesh collision and its keel half a metre below the waterline; it no
+longer orbits the horizon.
+
+The cave's terrain cut, interior wall profile and traversable floor agree; the generated rock entrance surrounds
+them. Never cover a mismatched entrance with a ramp. Every road junction shares endpoint elevations; cubic
+shoulder weights prevent unrelated neighbouring roads from pulling a centreline sideways. The region test
+checks actual finished terrain grade and cross-slope as well as bridge traversal.

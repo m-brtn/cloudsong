@@ -17,6 +17,8 @@ struct Settings {
     float effects = 1.0f; // 0..1
     float lookSpeed = 1.0f;
     bool invertLook = false;
+    float motionBlur = .25f;  // 0..1: camera exposure as a fraction of a 60 Hz frame
+    float colourBoost = .12f; // 0..0.3: restrained vibrance, preserving neutral whites
     bool dayNightCycle = false;
     float timeOfDay = 11.5f;        // hours, frozen until the player enables the cycle
     float dayLengthMinutes = 20.0f; // real minutes per full day

@@ -1,0 +1,7 @@
+{
+  "layers": [{
+    "name": "perched",
+    "start": "standing",
+    "states": [{"name": "standing", "clip": "BirdIdlestanding"}]
+  }]
+}

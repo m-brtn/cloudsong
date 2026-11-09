@@ -1,0 +1,48 @@
+screen play
+day_cycle off
+time_of_day 12
+until hero_ready == 1 10
+teleport -15 3 -19 0
+camera 0 .1 3
+wait 2
+expect grounded == 1
+move 0 1
+wait 1.3
+expect levitate > .8
+expect water_clearance > .15
+expect water_clearance < .6
+expect hero_pose_valid == 1
+capture water/enter.png
+move 0 0
+wait .7
+expect levitate > .95
+expect vy < .15
+expect vy > -.15
+camera 3.14159 .1 3
+capture water/front.png
+mark y
+screen pause
+wait .5
+expect d_y == 0
+screen play
+camera 0 .1 3
+move 0 -1
+wait 2.3
+move 0 0
+wait 1
+expect levitate < .05
+expect grounded == 1
+expect hero_pose_valid == 1
+capture water/shore.png
+teleport -15 0 -10 0
+wait 2
+expect levitate > .95
+mark energy
+jump down
+wait .1
+jump up
+expect vy > 3
+expect d_energy == 0
+wait 3
+expect levitate > .9
+quit

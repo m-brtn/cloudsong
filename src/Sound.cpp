@@ -358,6 +358,17 @@ void Sound::flap() { play(m_flap, 0.35f, 0.95f + 0.1f * float(m_step++ % 3) * 0.
 
 void Sound::call() { play(m_chime, 0.45f, 1.0f, 0.6f); }
 
+void Sound::harpNote(int note, glm::vec3 at) {
+    constexpr float notes[] = {0, 7, 4, 12, 9, 7};
+    play(m_pluck, .38f, std::exp2(notes[std::clamp(note, 0, 5)] / 12), .6f, at);
+}
+
+void Sound::chimeTaken(int count) {
+    static constexpr float notes[] = {0, 4, 7, 12, 14};
+    play(m_pluck, .34f, std::exp2(notes[(count - 1) % 5] / 12.0f), .65f);
+    if (count == 3) play(m_chime, .28f, 1.0f, .65f);
+}
+
 void Sound::lightTaken(int count) {
     // Up the pentatonic scale with every light gathered.
     static constexpr float kSteps[8] = {0.0f, 2.0f, 4.0f, 7.0f, 9.0f, 12.0f, 14.0f, 16.0f};

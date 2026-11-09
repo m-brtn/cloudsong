@@ -1,0 +1,17 @@
+{
+  "parameters": {"speed": 0},
+  "layers": [{
+    "name": "resident", "start": "idle",
+    "states": [
+      {"name": "idle", "clip": "CanineIdle"},
+      {"name": "walk", "clip": "CanineWalk"},
+      {"name": "trot", "clip": "CanineTrot"}
+    ],
+    "transitions": [
+      {"from":"idle","to":"walk","duration":0.25,"conditions":[{"parameter":"speed","op":">","value":0.12}]},
+      {"from":"walk","to":"idle","duration":0.25,"conditions":[{"parameter":"speed","op":"<","value":0.08}]},
+      {"from":"walk","to":"trot","duration":0.22,"conditions":[{"parameter":"speed","op":">","value":0.85}]},
+      {"from":"trot","to":"walk","duration":0.22,"conditions":[{"parameter":"speed","op":"<","value":0.75}]}
+    ]
+  }]
+}

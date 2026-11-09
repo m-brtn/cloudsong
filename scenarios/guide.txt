@@ -9,15 +9,17 @@ quality high
 teleport 2 0.8 -36 0
 wait 1.5
 log "high: before a call"
+# Other residents have their own eye trails; measure only the added guide ribbons.
+mark trails
 expect guide == 0
-expect trails == 0
+expect d_trails == 0
 expect particles >= 0
 expect particle_systems >= 0
 call
 wait 0.5
 expect guide == 1
 expect guide_goal == 0
-expect trails >= 2
+expect d_trails >= 2
 mark guide_dist
 wait 2.5
 log "high: the guide in flight"
@@ -29,7 +31,7 @@ wait 1
 expect guide == 1
 until guide == 0 8
 wait 0.3
-expect trails == 0
+expect d_trails == 0
 
 # A call while it flies sends it on: still one guide's ribbons (3 heads with their bands on this setting).
 call
@@ -37,8 +39,8 @@ wait 1
 call
 wait 0.5
 expect guide == 1
-expect trails >= 2
-expect trails <= 6
+expect d_trails >= 2
+expect d_trails <= 6
 until guide == 0 20
 
 # The goal at hand (the pond's candle 5 m away, out of the call's reach): once round the figure.
@@ -72,7 +74,8 @@ until guide == 0 30
 quality medium
 wait 1
 log "medium: before a call"
-expect trails == 0
+mark trails
+expect d_trails == 0
 expect particles >= 0
 call
 wait 3
@@ -85,7 +88,8 @@ until guide == 0 30
 quality low
 wait 1
 log "low: before a call"
-expect trails == 0
+mark trails
+expect d_trails == 0
 expect particles >= 0
 call
 wait 3

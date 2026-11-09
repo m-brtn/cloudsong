@@ -9,6 +9,7 @@
 #include <quench/physics/PhysicsWorld.h>
 
 #include <Jolt/Jolt.h>
+#include <optional>
 
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 
@@ -19,9 +20,10 @@ struct PlayerInput {
     bool walk = false;    // slower
     bool jumpPressed = false;
     bool jumpHeld = false;
-    float cameraYaw = 0.0f; // the camera's heading (radians; 0 looks along +z)
-    float lift = 0.0f;      // an updraft's pull (m/s upward it carries a glider to)
-    glm::vec2 pull{0.0f};   // and its pull toward its middle (m/s² in x and z)
+    float cameraYaw = 0.0f;            // the camera's heading (radians; 0 looks along +z)
+    float lift = 0.0f;                 // an updraft's pull (m/s upward it carries a glider to)
+    std::optional<float> waterSurface; // world elevation of open water under the feet
+    glm::vec2 pull{0.0f};              // and its pull toward its middle (m/s² in x and z)
 };
 
 class Player {
@@ -31,16 +33,28 @@ public:
     void step(float dt, const PlayerInput& input, quench::PhysicsWorld& physics);
     void teleport(glm::vec3 position, float yaw);
 
+    bool beginWindSong();
+    float windSong() const { return m_windSong; }
+    float windCooldown() const { return m_windCooldown; }
     glm::vec3 position() const { return m_position; } // the feet (world)
     glm::vec3 velocity() const { return m_velocity; }
     float yaw() const { return m_yaw; }
     bool grounded() const { return m_grounded; }
+    float levitate() const { return m_levitate; }
     float glide() const { return m_glide; } // 0..1
     float flap() const { return m_flapTime < kFlapDuration ? m_flapTime / kFlapDuration : 0.0f; }
     bool flapped() const { return m_flappedThisStep; }
     bool jumped() const { return m_jumpedThisStep; }
     bool landed() const { return m_landedThisStep; }
     float airTime() const { return m_airTime; }
+    float jumpCrouch() const {
+        return m_jumpPreparation < 0 ? 0.0f : std::sin(kPi * std::clamp(m_jumpPreparation / 0.13f, 0.0f, 1.0f));
+    }
+    float landingCrouch() const {
+        return m_landingTime < 0 || m_landingTime >= 0.22f
+                   ? 0.0f
+                   : std::sin(kPi * std::clamp(m_landingTime / 0.22f, 0.0f, 1.0f));
+    }
 
     float energy = 2.0f; // marks of the cape lit (fractional while recharging)
     int maxEnergy = 2;
@@ -54,9 +68,13 @@ private:
     float m_yaw = 0.0f;
     bool m_grounded = true;
     float m_glide = 0.0f;
+    float m_levitate = 0.0f, m_waterCooldown = 0.0f, m_waterSettleTime = 0.0f;
+    bool m_waterFlying = false, m_waterSettle = false;
     float m_airTime = 0.0f;
     float m_flapTime = 10.0f;
     float m_coyote = 0.0f;
+    float m_windSong = 0.0f, m_windCooldown = 0.0f;
+    float m_jumpPreparation = -1.0f, m_landingTime = -1.0f;
     bool m_flappedThisStep = false, m_jumpedThisStep = false, m_landedThisStep = false;
 };
 

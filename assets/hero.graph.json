@@ -1,0 +1,78 @@
+{
+  "parameters": {
+    "speed": 0,
+    "cadence": 1,
+    "grounded": true
+  },
+  "layers": [
+    {
+      "name": "base",
+      "start": "idle",
+      "states": [
+        {
+          "name": "idle",
+          "clip": "HumanSpIdle"
+        },
+        {
+          "name": "move",
+          "speedParameter": "cadence",
+          "clip": "HumanSpJogging"
+        },
+        {
+          "name": "air",
+          "clip": "HumanSpIdle"
+        }
+      ],
+      "transitions": [
+        {
+          "from": "*",
+          "to": "air",
+          "conditions": [
+            {
+              "parameter": "grounded",
+              "op": "==",
+              "value": false
+            }
+          ],
+          "duration": 0.12
+        },
+        {
+          "from": "air",
+          "to": "idle",
+          "conditions": [
+            {
+              "parameter": "grounded",
+              "op": "==",
+              "value": true
+            }
+          ],
+          "duration": 0.18
+        },
+        {
+          "from": "idle",
+          "to": "move",
+          "conditions": [
+            {
+              "parameter": "speed",
+              "op": ">",
+              "value": 0.15
+            }
+          ],
+          "duration": 0.18
+        },
+        {
+          "from": "move",
+          "to": "idle",
+          "conditions": [
+            {
+              "parameter": "speed",
+              "op": "<",
+              "value": 0.1
+            }
+          ],
+          "duration": 0.22
+        }
+      ]
+    }
+  ]
+}

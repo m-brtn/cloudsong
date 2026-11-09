@@ -315,6 +315,11 @@ Character::Character(const CharacterLook& look) : m_look(look) {
     for (glm::mat4& m : m_model) m = glm::mat4(1.0f);
 }
 
+void Character::setBodyBind(const std::array<glm::vec3, kBodyJoints>& rest) {
+    std::copy(rest.begin(), rest.end(), m_bind.begin());
+    m_importedBody = true;
+}
+
 void Character::setPlacement(glm::vec3 feet, float yaw, float pitch) {
     m_feet = feet;
     m_yaw = yaw;
@@ -358,7 +363,7 @@ void Character::resetCape() {
 void Character::forward(const std::array<glm::quat, kBodyJoints>& local, glm::vec3 hipsOffset) {
     for (int j = 0; j < kBodyJoints; ++j) {
         const int p = m_parent[std::size_t(j)];
-        glm::vec3 offset = p < 0 ? kRest[std::size_t(j)] : kRest[std::size_t(j)] - kRest[std::size_t(p)];
+        glm::vec3 offset = p < 0 ? m_bind[std::size_t(j)] : m_bind[std::size_t(j)] - m_bind[std::size_t(p)];
         if (j == kHips) offset += hipsOffset;
         const glm::mat4 m = glm::translate(glm::mat4(1.0f), offset) * glm::mat4_cast(local[std::size_t(j)]);
         m_model[std::size_t(j)] = p < 0 ? m : m_model[std::size_t(p)] * m;
@@ -379,8 +384,8 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
     const int halfStep = int(std::floor((ph + 0.5f * kPi) / kPi));
     m_stepped = halfStep != m_halfStep && in.grounded && move > 0.3f && in.sit < 0.5f;
     m_halfStep = halfStep;
-    const float walk = (1.0f - m_air) * (1.0f - in.sit);
-    const float air = m_air * (1.0f - in.glide);
+    const float walk = (1.0f - m_air) * (1.0f - in.sit) * (1.0f - in.levitate);
+    const float air = m_air * (1.0f - in.glide) * (1.0f - in.levitate);
     const float glide = in.glide;
 
     // Euler angles per joint (x pitch, y yaw, z roll), summed from the gaits by their weights.
@@ -413,18 +418,55 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
             e[std::size_t(arm + 1)] += glm::vec3(-(0.18f + 1.0f * run * move), 0.0f, 0.0f) * walk;
         }
     }
-    // In the air: knees up, arms out, more so while rising.
+    // Keep one leading knee through the airborne phase; standing hops alternate leads.
+    // Push-off stays extended first, then the lead leg gathers sooner and higher;
+    // both legs reach back down before landing, rather than holding a vault pose.
+    if (in.grounded) {
+        if (in.speed > 0.25f) m_jumpLead = std::sin(ph) >= 0.0f ? 0 : 1;
+    } else if (m_wasGrounded && in.speed <= 0.25f) {
+        m_jumpLead = 1 - m_jumpLead;
+    }
+    m_wasGrounded = in.grounded;
     if (air > 0.0f) {
-        const float rise = std::clamp(in.verticalSpeed / 4.0f, -1.0f, 1.0f);
-        e[kLUpLeg] += glm::vec3(-0.75f, 0.0f, 0.03f) * air;
-        e[kLLeg] += glm::vec3(1.1f, 0.0f, 0.0f) * air;
-        e[kRUpLeg] += glm::vec3(-0.15f, 0.0f, -0.03f) * air;
-        e[kRLeg] += glm::vec3(0.55f, 0.0f, 0.0f) * air;
-        e[kLArm] += glm::vec3(-0.3f, 0.0f, 0.55f + 0.35f * rise) * air;
-        e[kRArm] += glm::vec3(-0.3f, 0.0f, -0.55f - 0.35f * rise) * air;
-        e[kLForearm] += glm::vec3(-0.4f, 0.0f, 0.0f) * air;
-        e[kRForearm] += glm::vec3(-0.4f, 0.0f, 0.0f) * air;
-        e[kHead] += glm::vec3(0.1f * rise, 0.0f, 0.0f) * air;
+        const float rise = smoothstep(-0.5f, 3.5f, in.verticalSpeed);
+        const float falling = 1.0f - smoothstep(-5.0f, -2.0f, in.verticalSpeed);
+        for (int side = 0; side < 2; ++side) {
+            const bool lead = side == m_jumpLead;
+            const float sign = side == 0 ? 1.0f : -1.0f;
+            const int leg = side == 0 ? kLUpLeg : kRUpLeg;
+            const int arm = side == 0 ? kLArm : kRArm;
+            const float tuck = smoothstep(lead ? 0.055f : 0.105f, lead ? 0.20f : 0.27f, in.airTime) *
+                               std::max(rise * 0.8f, 1.0f - smoothstep(0.5f, 3.5f, std::abs(in.verticalSpeed)));
+            const float hip = glm::mix(-0.12f, lead ? -0.93f : -0.43f, tuck) * (1.0f - 0.80f * falling);
+            const float knee = glm::mix(0.25f, lead ? 1.55f : 0.95f, tuck) * (1.0f - 0.76f * falling);
+            e[std::size_t(leg)] += glm::vec3(hip, 0.0f, sign * 0.025f) * air;
+            e[std::size_t(leg + 1)] += glm::vec3(knee, 0.0f, 0.0f) * air;
+            e[std::size_t(leg + 2)] += glm::vec3(-hip - knee + 0.12f * rise, 0.0f, 0.0f) * air;
+            e[std::size_t(arm)] +=
+                glm::vec3(-0.20f - (lead ? 0.08f : 0.17f) * rise, 0.0f, sign * (0.25f + 0.18f * rise)) * air;
+            e[std::size_t(arm + 1)] += glm::vec3(-0.35f, 0.0f, 0.0f) * air;
+        }
+        e[kHead] += glm::vec3(-0.04f * rise + 0.06f * falling, 0.0f, 0.0f) * air;
+    }
+    if (in.levitate > 0) {
+        const float w = in.levitate;
+        e[kLArm] += glm::vec3(-.12f, 0, 1.05f) * w;
+        e[kRArm] += glm::vec3(-.12f, 0, -1.05f) * w;
+        e[kLForearm] += glm::vec3(-.18f, 0, .12f) * w;
+        e[kRForearm] += glm::vec3(-.18f, 0, -.12f) * w;
+        e[kLUpLeg] += glm::vec3(-.95f, 0, .035f) * w;
+        e[kLLeg] += glm::vec3(1.85f, 0, 0) * w;
+        e[kLFoot] += glm::vec3(-.65f, 0, 0) * w;
+        e[kRUpLeg] += glm::vec3(.10f, 0, -.02f) * w;
+        e[kRLeg] += glm::vec3(.28f, 0, 0) * w;
+        e[kRFoot] += glm::vec3(-.20f, 0, 0) * w;
+    }
+    const float compression = std::max(in.jumpCrouch, in.landingCrouch * 0.65f);
+    e[kChest] += glm::vec3(0.18f * compression, 0, 0);
+    e[kHead] += glm::vec3(-0.12f * compression, 0, 0);
+    for (const int arm : {kLArm, kRArm}) {
+        e[std::size_t(arm)].x += 0.35f * in.jumpCrouch - 0.2f * in.landingCrouch;
+        e[std::size_t(arm + 1)].x -= 0.2f * compression;
     }
     // Gliding: arms spread like wings, legs trailing; the body's pitch is the placement's.
     if (glide > 0.0f) {
@@ -478,6 +520,13 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
         e[kChest] += glm::vec3(-0.1f, 0.0f, 0.0f) * w;
     }
 
+    if (in.music > 0) {
+        const float pluck = std::sin(m_time * 7.0f);
+        e[kLArm] += glm::vec3(-.9f, .2f, .3f) * in.music;
+        e[kRArm] += glm::vec3(-.75f, -.2f, -.35f) * in.music;
+        e[kLForearm] += glm::vec3(-.6f + .12f * pluck, 0, -.2f) * in.music;
+        e[kRForearm] += glm::vec3(-.65f - .12f * pluck, 0, .2f) * in.music;
+    }
     std::array<glm::quat, kBodyJoints> local;
     for (int j = 0; j < kBodyJoints; ++j) {
         const glm::vec3 a = e[std::size_t(j)];
@@ -503,6 +552,8 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
     hips.y += m_hipsDrop;
     forward(local, hips);
     if (ikWeight > 0.01f) {
+        const std::array<glm::quat, 2> feetRotation = {glm::quat_cast(m_model[kLFoot]),
+                                                       glm::quat_cast(m_model[kRFoot])};
         for (int side = 0; side < 2; ++side) {
             const int up = side == 0 ? kLUpLeg : kRUpLeg;
             const float lift = delta[std::size_t(side)] - m_hipsDrop;
@@ -512,11 +563,40 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
             ik.pole = glm::vec3(0.0f, 0.0f, 1.0f);
             ik.midAxis = glm::vec3(1.0f, 0.0f, 0.0f);
             ik.weight = ikWeight;
-            const quench::animation::TwoBoneResult r = quench::animation::solveTwoBone(
-                m_model[std::size_t(up)], m_model[std::size_t(up + 1)], m_model[std::size_t(up + 2)], ik);
-            local[std::size_t(up)] = local[std::size_t(up)] * r.start;
-            local[std::size_t(up + 1)] = local[std::size_t(up + 1)] * r.mid;
+            if (m_importedBody) {
+                // Keep imported legs in their forward bend plane. A nearly straight
+                // scan must not acquire the general solver's arbitrary axial twist.
+                const glm::vec3 target = glm::vec3(glm::inverse(m_model[kHips]) * glm::vec4(ik.target, 1.0f)) -
+                                         (m_bind[std::size_t(up)] - m_bind[kHips]);
+                const glm::vec3 upper = m_bind[std::size_t(up + 1)] - m_bind[std::size_t(up)];
+                const glm::vec3 lower = m_bind[std::size_t(up + 2)] - m_bind[std::size_t(up + 1)];
+                const float a = glm::length(glm::vec2(upper.y, upper.z));
+                const float b = glm::length(glm::vec2(lower.y, lower.z));
+                const float d = std::clamp(glm::length(glm::vec2(target.y, target.z)), 0.01f, a + b - 0.0001f);
+                const float bend = kPi - std::acos(std::clamp((a * a + b * b - d * d) / (2 * a * b), -1.0f, 1.0f));
+                const float hip = std::atan2(target.z, -target.y) +
+                                  std::acos(std::clamp((a * a + d * d - b * b) / (2 * a * d), -1.0f, 1.0f));
+                const float restHip = std::atan2(upper.z, -upper.y);
+                const float restKnee = std::atan2(lower.z, -lower.y);
+                local[std::size_t(up)] = glm::angleAxis(e[std::size_t(up)].z, glm::vec3(0, 0, 1)) *
+                                         glm::angleAxis(restHip - hip, glm::vec3(1, 0, 0));
+                local[std::size_t(up + 1)] = glm::angleAxis(restKnee - restHip + bend, glm::vec3(1, 0, 0));
+            } else {
+                const quench::animation::TwoBoneResult r = quench::animation::solveTwoBone(
+                    m_model[std::size_t(up)], m_model[std::size_t(up + 1)], m_model[std::size_t(up + 2)], ik);
+                local[std::size_t(up)] = local[std::size_t(up)] * r.start;
+                local[std::size_t(up + 1)] = local[std::size_t(up + 1)] * r.mid;
+            }
         }
+        forward(local, hips);
+        // Ground placement changes the leg's bend, not the boot's heading.
+        // Preserve the gait's world-space foot orientation after the IK twist.
+        if (m_importedBody)
+            for (int side = 0; side < 2; ++side) {
+                const int leg = side == 0 ? kLLeg : kRLeg;
+                local[std::size_t(leg + 1)] =
+                    glm::inverse(glm::quat_cast(m_model[std::size_t(leg)])) * feetRotation[std::size_t(side)];
+            }
         forward(local, hips);
     }
     // The head turns toward what the figure looks at (the engine's aim IK), eased.
@@ -550,7 +630,7 @@ void Character::update(float dt, const PoseInput& in, const GroundQuery& ground)
 
     const glm::mat4 toModel = glm::inverse(m_world);
     for (int j = 0; j < kBodyJoints; ++j)
-        m_palette[std::size_t(j)] = m_model[std::size_t(j)] * glm::translate(glm::mat4(1.0f), -kRest[std::size_t(j)]);
+        m_palette[std::size_t(j)] = m_model[std::size_t(j)] * glm::translate(glm::mat4(1.0f), -m_bind[std::size_t(j)]);
     for (int r = 0; r < kCapeRows; ++r)
         for (int c = 0; c < kCapeCols; ++c) {
             auto at = [&](int rr, int cc) {

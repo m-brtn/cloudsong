@@ -39,7 +39,9 @@ public:
     void jump();
     void flap();
     void call();
+    void harpNote(int note, glm::vec3 at);
     void lightTaken(int count);
+    void chimeTaken(int count);
     void candleLit(glm::vec3 at);
     void spiritWakes(glm::vec3 at);
 

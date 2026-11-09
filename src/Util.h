@@ -121,6 +121,37 @@ inline void computeNormals(MeshData& mesh) {
     }
 }
 
+inline MeshData chamferedBlock(glm::vec3 half, float bevel) {
+    MeshData mesh;
+    bevel = std::min(bevel, std::min({half.x, half.y, half.z}) * .65f);
+    for (int ring = 0; ring < 4; ++ring) {
+        const float inset = ring == 0 || ring == 3 ? bevel : 0;
+        const float x = half.x - inset, z = half.z - inset;
+        const float y = ring == 0 ? -half.y : ring == 1 ? -half.y + bevel : ring == 2 ? half.y - bevel : half.y;
+        const float corner = std::max(.001f, bevel - inset * .5f);
+        for (const auto p : std::array<glm::vec2, 8>{{{-x + corner, -z},
+                                                      {x - corner, -z},
+                                                      {x, -z + corner},
+                                                      {x, z - corner},
+                                                      {x - corner, z},
+                                                      {-x + corner, z},
+                                                      {-x, z - corner},
+                                                      {-x, -z + corner}}})
+            mesh.vertices.push_back({.position = {p.x, y, p.y}});
+    }
+    for (std::uint32_t ring = 0; ring < 3; ++ring)
+        for (std::uint32_t j = 0; j < 8; ++j) {
+            const auto a = ring * 8 + j, b = ring * 8 + (j + 1) % 8;
+            mesh.indices.insert(mesh.indices.end(), {a, a + 8, b, b, a + 8, b + 8});
+        }
+    for (std::uint32_t j = 1; j + 1 < 8; ++j) {
+        mesh.indices.insert(mesh.indices.end(), {0, j, j + 1});
+        mesh.indices.insert(mesh.indices.end(), {24, 24 + j + 1, 24 + j});
+    }
+    computeNormals(mesh);
+    return mesh;
+}
+
 // A closed surface of revolution around +y: `profile` gives (radius, y) from the bottom pole to the top pole.
 inline MeshData lathe(const std::vector<glm::vec2>& profile, int segments, glm::vec4 color = glm::vec4(1.0f)) {
     MeshData m;

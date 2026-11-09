@@ -1,0 +1,73 @@
+{
+  "clips": {
+    "HumanSpHappyIdle": {
+      "loop": true
+    },
+    "HumanSpIdle": {
+      "loop": true
+    },
+    "HumanSpJogging": {
+      "loop": true,
+      "events": [
+        {
+          "time": 0.2,
+          "name": "footstep",
+          "value": 0
+        },
+        {
+          "time": 0.63,
+          "name": "footstep",
+          "value": 1
+        }
+      ]
+    },
+    "HumanSpJumping": {
+      "loop": false
+    },
+    "HumanSpRun": {
+      "loop": true,
+      "events": [
+        {
+          "time": 0.05,
+          "name": "footstep",
+          "value": 0
+        },
+        {
+          "time": 0.3667,
+          "name": "footstep",
+          "value": 1
+        }
+      ]
+    },
+    "HumanSpRun2": {
+      "loop": true,
+      "events": [
+        {
+          "time": 0.25,
+          "name": "footstep",
+          "value": 1
+        },
+        {
+          "time": 0.62,
+          "name": "footstep",
+          "value": 0
+        }
+      ]
+    },
+    "HumanSpWalking": {
+      "loop": true,
+      "events": [
+        {
+          "time": 0.1,
+          "name": "footstep",
+          "value": 1
+        },
+        {
+          "time": 1.2,
+          "name": "footstep",
+          "value": 0
+        }
+      ]
+    }
+  }
+}

@@ -9,3 +9,5 @@ compile_commands.json
 CMakeUserPresets.json
 !tests/golden/**/*.png
 !docs/images/*.png
+
+!art/character-v3/*.png

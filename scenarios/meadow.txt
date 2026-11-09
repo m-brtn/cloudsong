@@ -1,0 +1,46 @@
+screen play
+day_cycle off
+time_of_day 12
+until creature_ready == 1 10
+until bird_ready == 1 10
+# Approach, stop beside the player, release attention, and both pushable bubbles.
+visit_glade 0 -3
+wait 4
+expect creature_attention == 1
+expect creature_distance < 2.0
+expect creature_speed < .12
+view_place glade
+capture glade/approach.png
+view_place creature
+capture glade/resident.png
+mark bubble_pushes
+visit_bubble 0
+move 0 1
+wait .9
+move 0 0
+expect d_bubble_pushes > 0
+expect bubble_speed > .1
+view_place glade
+capture glade/bubble.png
+mark bubble_pushes
+visit_bubble 1
+move 0 1
+wait .9
+move 0 0
+expect d_bubble_pushes > 0
+visit_glade 0 -13
+wait 3
+expect creature_attention == 0
+mark bird_phase
+wait .4
+expect d_bird_phase > .001
+screen pause
+mark bird_phase
+mark bubble_speed
+wait .4
+expect d_bird_phase == 0
+expect d_bubble_speed == 0
+screen play
+view_place bird
+capture glade/bird.png
+quit

@@ -2,14 +2,15 @@
 
 // The region: floating isles of grass above a sea of clouds, their meadows (grass and flowers that sway in the
 // weather's wind), stone ruins, a pond, a cave with light falling in, small isles to glide between and the temple on
-// the high isle. Everything is made in code from a fixed seed, so every run builds the same world. The world's
-// geometry goes into the renderer's scene and, where it can be stood on, into the physics world.
+// the high isle. Seeded terrain and authored placements make the same world each run; imported sanctuary, willow
+// and harp meshes complement the procedural geometry. Rendering and collision share the placed geometry.
 
 #include "Util.h"
 
 #include <quench/navigation/NavMesh.h>
 #include <quench/physics/PhysicsWorld.h>
 #include <quench/render/Scene.h>
+#include <quench/render/SceneAssets.h>
 
 #include <optional>
 #include <vector>
@@ -25,6 +26,8 @@ struct Bump {
     float height;        // negative: a hollow
     float flat = 0.0f;   // 0..1: share of the radius that is level at the top (a plateau, a pond's floor)
     float jagged = 0.0f; // 0..: how much the outline wanders from a circle
+    glm::vec2 stretch{1.0f};
+    float yaw = 0.0f;
 };
 
 struct IsleDesc {
@@ -52,6 +55,7 @@ struct Isle {
 struct Landmarks {
     glm::vec3 start; // the player's first place
     float startYaw = 0.0f;
+    std::vector<glm::vec3> chimes;   // optional exploration collectibles; three awaken the wind song
     std::vector<glm::vec3> lights;   // the drifting lights to collect
     std::vector<glm::vec3> candles;  // the candles (the flame's place)
     std::vector<glm::vec3> lanterns; // stone lanterns that always burn (the flame's place)
@@ -70,6 +74,9 @@ struct Landmarks {
     float caveHeight = 7.5f;
     glm::vec3 pond;
     float pondRadius = 6.0f;
+    glm::vec3 cottage;
+    glm::vec3 meadowGlade;
+    glm::vec3 musicCourt, musician; // level courtyard floor, and the resident's feet
 };
 
 // Ground types for footsteps.
@@ -83,10 +90,13 @@ public:
     // bodies into the physics world.
     Result<void> build(quench::render::Scene& scene, quench::PhysicsWorld& physics, quench::render::SurfaceId world,
                        quench::render::SurfaceId foliage, float grassDensity);
+    Result<void> loadArchitecture(quench::render::SceneAssets& assets, quench::PhysicsWorld& physics);
     // Grass and flower patches near the camera in full, far ones thinned.
     void updateDetail(quench::render::Scene& scene, glm::vec3 camera);
     // The call's ring of light over the flowers: its centre (world) and the seconds since the call (large: none).
     void setCallRing(quench::render::Scene& scene, glm::vec3 centre, float age);
+    void setChime(quench::render::Scene& scene, std::size_t index, float age, float time);
+    glm::vec3 shipPosition() const { return m_shipPosition; }
     void setCandleLit(quench::render::Scene& scene, int candle, bool lit);
 
     const std::vector<Isle>& isles() const { return m_isles; }
@@ -94,6 +104,8 @@ public:
     // The local ground height below a local point (the isles' terrain, not the ruins).
     std::optional<float> terrainHeight(glm::vec2 xz) const;
     Ground groundAt(glm::vec3 local) const;
+    float pathMaxGrade() const { return m_pathMaxGrade; }
+    float pathMaxCrossSlope() const { return m_pathMaxCrossSlope; }
     // What the spirits walk on (local coordinates): the static geometry near the way, collected by build().
     quench::navigation::Geometry takeNavGeometry() { return std::move(m_nav); }
 
@@ -101,14 +113,54 @@ private:
     struct Patch {
         glm::vec3 centre; // world
         quench::render::InstanceId near, far;
-        bool nearShown = true;
+        int detail = 2; // 2 near, 1 far, 0 hidden
     };
 
+    struct Path {
+        std::vector<glm::vec2> points;
+        std::vector<float> heights; // graded centreline, shared by ground and bridge approaches
+        float width;
+        glm::vec2 low{1e9f}, high{-1e9f};
+    };
+    struct Bridge {
+        glm::vec2 a, b;
+        float width, ya, yb;
+    };
+    std::vector<Path> m_paths;
+    std::vector<glm::vec2> m_meadowSteps;
+    std::vector<Bridge> m_bridges;
+    float m_pathMaxGrade = 0, m_pathMaxCrossSlope = 0;
+    std::vector<glm::vec4> m_foundations; // centre x/z, level radius, height
+    float foundationHeight(glm::vec2 p, float natural) const;
+    void layoutPaths();
+    struct GardenObject {
+        glm::vec2 at;
+        float height, yaw;
+        bool tree;
+        float floor = 0;
+    };
+    std::vector<GardenObject> m_garden;
+    void layoutGarden();
+    void layoutChimes();
+    struct CacheCover {
+        glm::vec2 at;
+        float yaw;
+        int kind;
+    };
+    std::vector<CacheCover> m_cacheCovers;
+    glm::vec3 m_shipPosition{0};
+    void buildRegion(quench::render::Scene& scene, quench::PhysicsWorld& physics);
+    bool onPath(glm::vec2 p) const;
+    float pathCoverage(glm::vec2 p) const;
+    float gradedHeight(glm::vec2 p, float natural) const;
+    float terrainSlope(glm::vec2 p) const;
     void buildIsle(quench::render::Scene& scene, quench::PhysicsWorld& physics, const Isle& isle);
     // Grass over an isle's rim and roots and vines below it (`rimY`: the rim's height round the outline).
     void buildHanging(quench::render::Scene& scene, const Isle& isle, const std::vector<float>& rimY);
     void buildFoliage(quench::render::Scene& scene, const Isle& isle, float density);
     void buildRuins(quench::render::Scene& scene, quench::PhysicsWorld& physics);
+    float caveCut(glm::vec3 local) const;
+    void buildCottage(quench::render::Scene& scene, quench::PhysicsWorld& physics);
     void buildCave(quench::render::Scene& scene, quench::PhysicsWorld& physics);
     void addLights(quench::render::Scene& scene);
     // How much of the open sky's light reaches the ground here (1 in the open, low inside the cave).
@@ -127,6 +179,7 @@ private:
     quench::render::MaterialId m_terrain, m_rock, m_stoneMaterial, m_grass, m_water, m_flame, m_flameOff,
         m_caveMaterial, m_glowCap;
     std::vector<quench::render::InstanceId> m_flames;
+    std::vector<std::array<quench::render::InstanceId, 2>> m_chimes;
     quench::render::MaterialDesc m_grassDesc;
     float m_detailDistance = 34.0f;
     quench::navigation::Geometry m_nav;

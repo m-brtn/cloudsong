@@ -1,0 +1,140 @@
+# Imported mesh, all textures and the 68-bone palette must be usable in gameplay.
+until hero_ready == 1 10
+expect hero_pose_valid == 1
+expect hero_animated == 1
+day_cycle off
+time_of_day 10
+wait .6
+expect grounded == 1
+expect hero_feet_forward > .7
+view 3.1 1.9 -34.1 2 1.45 -36
+capture hero/front.png
+view 2 1.8 -38.2 2 1.45 -36
+capture hero/back.png
+view 5 2.4 -32 2 1.4 -35
+move 0 1
+wait .17
+expect hero_pose_valid == 1
+expect hero_feet_forward > .5
+expect hero_knees_forward > -.01
+capture hero/run-front.png
+wait .16
+expect hero_feet_forward > .5
+expect hero_knees_forward > -.01
+capture hero/run-stride.png
+expect hero_hood_bend > .005
+move 0 0
+view off
+teleport -40 30 70 0
+camera 0 .2 2.4
+jump down
+wait .7
+expect glide > .5
+expect hero_pose_valid == 1
+capture hero/glide-back.png
+orbit 3.14 .05 2.4
+wait .1
+capture hero/glide-front.png
+jump up
+wait .05
+jump down
+wait .15
+expect hero_pose_valid == 1
+capture hero/flap-front.png
+jump up
+move 0 0
+teleport 2 1 -36 0
+wait .1
+until grounded == 1 3
+wait .3
+expect hero_pose_valid == 1
+expect hero_feet_forward > .7
+time_of_day 0
+view 2 1.8 -38.2 2 1.45 -36
+wait .5
+capture hero/night.png
+view off
+# Uphill and cross-slope: independent foot height and orientation, after landing.
+time_of_day 10
+teleport 14 15 8 0
+wait .1
+until grounded == 1 5
+wait 1
+expect hero_pose_valid == 1
+expect hero_ground_slope > .4
+expect hero_toe_slope_error < .15
+expect hero_knees_forward > -.01
+camera 1.57 .1 2.4
+capture hero/slope-uphill.png
+teleport 14 15 8 1.57
+wait .1
+until grounded == 1 5
+wait 1
+expect hero_pose_valid == 1
+expect hero_ground_slope > .4
+expect hero_toe_slope_error < .15
+expect hero_knees_forward > -.01
+camera 0 .1 2.4
+capture hero/slope-across.png
+# Inspect a full steady run, not only the first blend frames after idle.
+teleport 18 8 -30 0
+wait .1
+until grounded == 1 5
+camera 0 .12 3
+move 0 1
+wait .6
+expect hero_facing_forward > .9
+wait .2
+expect hero_facing_forward > .9
+wait .2
+expect hero_facing_forward > .9
+wait .2
+expect hero_facing_forward > .9
+wait .2
+expect hero_facing_forward > .9
+until hero_foot_clearance > .10 1
+until hero_toe_flex > .25 1
+expect hero_feet_forward > .7
+capture hero/forward-run.png
+expect hero_feet_lateral_error < .05
+move 0 0
+wait .1
+expect hero_feet_lateral_error < .05
+wait .15
+expect hero_feet_lateral_error < .05
+wait .15
+expect hero_feet_lateral_error < .05
+# Tap jump: anticipate on the ground, push off, tuck aloft, absorb landing.
+mark y
+jump down
+wait .06
+expect grounded == 1
+expect jump_crouch > .8
+expect hero_knee_bend > .45
+capture hero/jump-anticipation.png
+jump up
+# Extension rolls the heel while the toe remains planted, before lift-off.
+until hero_toe_flex > .08 .06
+expect grounded == 1
+expect hero_feet_forward > .7
+capture hero/jump-heel-rise.png
+wait .07
+expect grounded == 0
+expect vy > 4
+capture hero/jump-push-off.png
+wait .25
+expect hero_jump_leg_separation > .055
+expect hero_jump_leg_separation < .24
+expect hero_knee_bend > .55
+expect hero_facing_forward > .9
+expect hero_toe_flex < .03
+capture hero/ordinary-jump.png
+until grounded == 1 5
+wait .08
+expect landing_crouch > .6
+expect hero_knee_bend > .35
+capture hero/jump-landing.png
+wait .3
+expect landing_crouch < .01
+expect hero_pose_valid == 1
+quit

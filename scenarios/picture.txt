@@ -1,0 +1,42 @@
+# Camera blur is restricted to playing. Exercise target replacement, downscaled depth,
+# settings, all effects disabled, colour alone and resuming at night.
+screen play
+day_cycle off
+time_of_day 12
+quality high
+picture_effects .25 .12
+camera 0 .12 4.8
+down L
+wait .3
+expect picture_blur == 1
+capture picture/turn.png
+screen pause
+wait .1
+expect picture_blur == 0
+screen settings
+wait .1
+expect picture_blur == 0
+expect imgui_id_conflicts == 0
+screen play
+quality low
+resize 844 390
+wait .3
+expect picture_blur == 1
+picture_effects 0 .12
+wait .1
+expect picture_blur == 0
+picture_effects 0 0
+wait .1
+expect picture_blur == 0
+capture picture/disabled.png
+quality medium
+picture_effects .25 .12
+time_of_day 0
+wait .3
+expect picture_blur == 1
+capture picture/night.png
+up L
+screen title
+wait .1
+expect picture_blur == 0
+quit

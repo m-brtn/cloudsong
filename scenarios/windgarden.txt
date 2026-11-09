@@ -1,0 +1,115 @@
+# Collect actual world items, then exercise the optional ability and its cooldown.
+screen play
+day_cycle off
+time_of_day 12
+until hero_ready == 1 10
+expect chime_total == 12
+expect chimes == 0
+expect wind_song_unlocked == 0
+teleport -40 55 70 0
+jump down
+wait .8
+call
+wait .1
+expect wind_song == 0
+jump up
+visit_chime 0
+wait .2
+expect chimes == 1
+visit_chime 0
+wait .2
+expect chimes == 1
+visit_chime 1
+wait .2
+expect chimes == 2
+expect wind_song_unlocked == 0
+visit_chime 2
+wait 1
+expect chimes == 3
+expect wind_song_unlocked == 1
+expect grounded == 1
+call
+wait .1
+expect wind_song == 0
+expect wind_cooldown == 0
+teleport -40 55 70 0
+camera 0 .15 3
+move 0 1
+jump down
+wait .8
+expect glide > .5
+call
+wait .4
+expect wind_song > .6
+expect wind_cooldown > 4
+expect vx > 13
+expect vy > 0
+capture windgarden/song.png
+screen pause
+wait 1
+expect wind_song > .6
+screen play
+call
+wait .1
+expect wind_cooldown < 4.7
+wait 1
+expect wind_song == 0
+call
+wait .1
+expect wind_song == 0
+wait 3.5
+expect wind_cooldown == 0
+teleport -40 55 70 0
+jump up
+wait .1
+jump down
+wait .8
+expect glide > .5
+call
+wait .2
+expect wind_song > .8
+expect hero_pose_valid == 1
+jump up
+move 0 0
+# Every find sits on traversable ground and remains collectible only once.
+visit_chime 3
+wait .8
+expect chimes == 4
+expect grounded == 1
+visit_chime 4
+wait .8
+expect chimes == 5
+expect grounded == 1
+visit_chime 5
+wait .8
+expect chimes == 6
+expect grounded == 1
+visit_chime 6
+wait .8
+expect chimes == 7
+expect grounded == 1
+visit_chime 7
+wait .8
+expect chimes == 8
+expect grounded == 1
+visit_chime 8
+wait .8
+expect chimes == 9
+expect grounded == 1
+visit_chime 9
+wait .8
+expect chimes == 10
+expect grounded == 1
+visit_chime 10
+wait .8
+expect chimes == 11
+expect grounded == 1
+visit_chime 11
+wait .8
+expect chimes == 12
+expect grounded == 1
+expect hero_pose_valid == 1
+visit_chime 11
+wait .2
+expect chimes == 12
+quit

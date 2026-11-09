@@ -64,8 +64,8 @@ Result<void> Spirits::create(render::Scene& scene, render::SurfaceId surface, co
     build.cellSize = 0.25f;
     build.cellHeight = 0.1f;
     build.tileSize = 64;
-    build.boundsMin = glm::vec3(-85.0f, -40.0f, -55.0f);
-    build.boundsMax = glm::vec3(95.0f, 90.0f, 250.0f);
+    build.boundsMin = glm::vec3(-210.0f, -90.0f, -130.0f);
+    build.boundsMax = glm::vec3(250.0f, 130.0f, 285.0f);
     Result<nav::NavMesh> mesh = nav::NavMesh::build(std::move(geometry), build, jobs);
     if (!mesh) {
         // The spirits still follow, through the air only.

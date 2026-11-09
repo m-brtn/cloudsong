@@ -31,6 +31,7 @@ public:
     MenuAction pause(Settings& settings, bool canQuit);
     // A line of text low on the screen (the controls, a few seconds after the start).
     void hint(const char* text, float alpha);
+    void windProgress(int count, int total, float cooldown);
     std::optional<glm::vec2> settingsPoint(std::string_view name) const {
         const auto it = m_settingsPoints.find(name);
         return m_settings && it != m_settingsPoints.end() ? std::optional(it->second) : std::nullopt;

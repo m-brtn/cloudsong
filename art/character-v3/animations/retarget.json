@@ -1,0 +1,30 @@
+{
+  "joints": {
+    "Hips": "Hips",
+    "Spine": "Spine",
+    "Spine1": "Spine1",
+    "Neck": "Neck",
+    "Head": "Head",
+    "LeftShoulder": "LeftShoulder",
+    "LeftArm": "LeftArm",
+    "LeftForeArm": "LeftForeArm",
+    "LeftHand": "LeftHand",
+    "RightShoulder": "RightShoulder",
+    "RightArm": "RightArm",
+    "RightForeArm": "RightForeArm",
+    "RightHand": "RightHand",
+    "LeftUpLeg": "LeftUpLeg",
+    "LeftLeg": "LeftLeg",
+    "LeftFoot": "LeftFoot",
+    "LeftToeBase": "LeftToeBase",
+    "RightUpLeg": "RightUpLeg",
+    "RightLeg": "RightLeg",
+    "RightFoot": "RightFoot",
+    "RightToeBase": "RightToeBase",
+    "Chest": "Spine2"
+  },
+  "translations": [
+    "Hips"
+  ],
+  "scale": 0.5889550937516598
+}

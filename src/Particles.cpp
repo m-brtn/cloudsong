@@ -195,14 +195,14 @@ quench::Result<void> Particles::create(render::Scene& scene, const World& world,
                             .seed = 19,
                             .rate = kCaveMotes.rate * b.motes,
                             .shape = Shape::Box,
-                            .extent = glm::vec3(8.0f, 2.5f, 8.0f),
+                            .extent = glm::vec3(2.5f, 1.0f, 3.5f),
                             .lifetime = {6.0f, 10.0f},
-                            .speed = {0.0f, 0.08f},
+                            .speed = {0.025f, 0.07f},
                             .spread = kPi,
                             .size = {0.025f, 0.045f},
                             .noise = 0.12f,
                             .noiseScale = 2.0f,
-                            .color = glm::vec3(4.0f, 3.6f, 1.6f) * 0.6f,
+                            .color = glm::vec3(.35f, 2.2f, 1.8f),
                             .colorOverLife = fadeInOut(0.15f, 0.8f),
                             .brightnessVariation = 0.5f,
                             .twinkle = 0.6f,
@@ -331,7 +331,7 @@ void Particles::buildWings(render::Scene& scene) {
                    .maxPoints = 128,
                    .maxLength = 10.0f,
                    .subdivisions = b.subdivisions,
-                   .width = 0.24f,
+                   .width = 0.42f,
                    .widthOverAge = {{0.0f, 0.4f}, {0.06f, 1.0f}, {0.4f, 0.65f}, {1.0f, 0.0f}},
                    .color = glm::vec3(0.45f, 0.28f, 0.1f),
                    .opacity = 0.055f,
@@ -344,7 +344,7 @@ void Particles::buildWings(render::Scene& scene) {
                    .softness = 0.1f,
                    .minPixels = 0.75f};
     TrailDesc core = body;
-    core.width = 0.010f;
+    core.width = 0.014f;
     core.color = glm::vec3(0.9f, 0.65f, 0.3f);
     core.opacity = 0.2f;
     core.minPixels = 0.6f;
@@ -401,17 +401,16 @@ void Particles::call(const World& world, glm::vec3 feet, std::optional<glm::vec3
     };
     const glm::vec2 side = horizontal(m_eye, feet, {0.0f, 1.0f});
     if (goal) {
-        // Into the cave and out of it through its mouth, under the portal's lintel.
-        const glm::vec2 mouth = horizontal(m_cave, m_caveEntrance, {1.0f, 0.0f});
-        const auto above = [&](glm::vec2 p, float lift) {
-            return glm::vec3(p.x, world.terrainHeight(p).value_or(m_cave.y - kAltitude) + kAltitude + lift, p.y);
-        };
+        // The cottage candle is reached through its doorway, never through
+        // its roof or the former cave portal.
+        const auto house = world.landmarks().cottage + glm::vec3(0, kAltitude, 0);
         const auto inCave = [&](glm::vec3 p) {
-            return glm::distance(xz(p), xz(m_cave)) < m_caveRadius && p.y < m_cave.y + m_caveHeight;
+            const auto q = p - house;
+            return std::abs(q.x) < 2.6f && std::abs(q.z) < 2.4f && q.y < 3.2f;
         };
-        const glm::vec3 inside = m_caveEntrance + glm::vec3(0.0f, 1.5f, 0.0f);
-        const glm::vec3 portal = above(xz(m_cave) + mouth * (m_caveRadius + 0.3f), 1.5f);
-        const glm::vec3 outside = above(xz(m_cave) + mouth * (m_caveRadius + 7.0f), 2.2f);
+        const glm::vec3 inside = house + glm::vec3(1.35f, 1.7f, -1.65f);
+        const glm::vec3 portal = house + glm::vec3(1.35f, 1.7f, -2.75f);
+        const glm::vec3 outside = house + glm::vec3(1.35f, 1.7f, -5.0f);
         const bool fromCave = inCave(route.back()), toCave = inCave(*goal);
         const glm::vec3 next = fromCave && !toCave ? inside : !fromCave && toCave ? outside : *goal;
         if (!out) {

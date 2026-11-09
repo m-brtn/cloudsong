@@ -64,10 +64,14 @@ wait 0.1
 expect candles == 2
 expect awake == 2
 
-# The cave's spirit.
-teleport 58.3 4 57.4 0.352
-wait 0.5
-aim 60.8 64.2
+# The cottage's spirit: approach the threshold, enter, then turn toward the candle.
+teleport 65.35 7 57.6 0
+wait 1
+aim 65.35 62
+move 0 1
+until z > 61.8 4
+move 0 0
+aim 64.2 64.9
 move 0 1
 until candle_dist < 2.0 5
 move 0 0

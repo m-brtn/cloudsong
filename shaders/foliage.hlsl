@@ -22,6 +22,9 @@ QuenchSurface foliage(QuenchSurfaceInput i) {
     const float back = saturate(dot(-i.view, quenchFrame.sunDir.xyz));
     s.emissive += s.albedo * quenchFrame.sunColor.rgb * (pow(back, 3.0) * 0.35 + 0.04) * along;
     if (i.uv.x > 2.5) {
+        // A secluded northern meadow: pale cyan flowers slowly reveal their light after sunset.
+        const float night = 1.0 - smoothstep(-0.08, 0.16, quenchFrame.sunDir.y);
+        s.emissive += i.color.rgb * i.custom.w * night;
         const float4 ring = quenchMaterial.params[0];
         const float d = distance(i.world.xz, ring.xz);
         const float front = ring.w * 9.0;

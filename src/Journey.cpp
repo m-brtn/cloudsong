@@ -20,8 +20,13 @@ float horizontal(glm::vec3 a, glm::vec3 b) { return glm::length(glm::vec2(a.x - 
 void Journey::reset(const Landmarks& landmarks) {
     m_landmarks = &landmarks;
     m_lightAge.assign(landmarks.lights.size(), -1.0f);
+    m_chimeAge.assign(landmarks.chimes.size(), -1.0f);
     m_candleLit.assign(landmarks.candles.size(), false);
     m_warm = false;
+}
+
+std::size_t Journey::chimesTaken() const {
+    return std::size_t(std::count_if(m_chimeAge.begin(), m_chimeAge.end(), [](float age) { return age >= 0; }));
 }
 
 std::size_t Journey::lightsTaken() const {
@@ -48,6 +53,17 @@ JourneyEvents Journey::step(float dt, Player& player, glm::vec3 feet, bool calle
         player.maxEnergy = std::min(player.maxEnergy + 1, kMaxMarks);
         player.energy = float(player.maxEnergy);
         events.lightTaken = int(i);
+    }
+
+    for (std::size_t i = 0; i < l.chimes.size(); ++i) {
+        if (m_chimeAge[i] >= 0) {
+            m_chimeAge[i] += dt;
+            continue;
+        }
+        if (glm::distance(chest, l.chimes[i]) > 1.0f) continue;
+        m_chimeAge[i] = 0;
+        player.energy = std::min(float(player.maxEnergy), player.energy + .35f);
+        events.chimeTaken = int(i);
     }
 
     if (called)
